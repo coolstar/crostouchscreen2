@@ -16,7 +16,7 @@ Signature   = "$WINDOWS NT$"
 Class       = HIDClass
 ClassGuid   = {745a17a0-74d3-11d0-b6fe-00a0c90f57da}
 Provider    = CoolStar
-DriverVer   = 06/21/2006,6.1.7779.2
+DriverVer   = 09/22/2015,2.1
 CatalogFile = crostouchscreen2.cat
 
 [DestinationDirs]
@@ -38,11 +38,11 @@ crostouchscreen2.sys  = 1,,
 ;*****************************************
 
 [Manufacturer]
-%StdMfg%=Standard,NT$ARCH$
+%StdMfg%=Standard,NTAMD64
 
 ; Decorated model section take precedence over undecorated 
 ; ones on XP and later.
-[Standard.NT$ARCH$]
+[Standard.NTAMD64]
 %CrosTouchScreen.DeviceDesc%=CrosTouchScreen_Device, ACPI\ATML0001
 
 [CrosTouchScreen_Device.NT]

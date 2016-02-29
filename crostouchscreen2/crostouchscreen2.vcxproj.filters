@@ -44,10 +44,13 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="spb.c">
+    <ClCompile Include="atmel.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="atmel.c">
+    <ClCompile Include="spb.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="crc.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

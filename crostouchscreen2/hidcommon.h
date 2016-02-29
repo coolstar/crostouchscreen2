@@ -28,7 +28,7 @@
 #define MULTI_MIN_COORDINATE   0x0000
 #define MULTI_MAX_COORDINATE   0x7FFF
 
-#define MULTI_MAX_COUNT        20
+#define MULTI_MAX_COUNT        10
 
 #pragma pack(1)
 typedef struct

@@ -47,6 +47,14 @@ _In_reads_bytes_(Length) PVOID Data,
 _In_ ULONG Length
 );
 
+NTSTATUS
+SpbReadDataSynchronously16(
+	_In_ SPB_CONTEXT *SpbContext,
+	_In_ UINT16 Address,
+	_In_reads_bytes_(Length) PVOID Data,
+	_In_ ULONG Length
+	);
+
 VOID
 SpbTargetDeinitialize(
 IN WDFDEVICE FxDevice,
@@ -66,3 +74,11 @@ IN UCHAR Address,
 IN PVOID Data,
 IN ULONG Length
 );
+
+NTSTATUS
+SpbWriteDataSynchronously16(
+	IN SPB_CONTEXT *SpbContext,
+	IN UINT16 Address,
+	IN PVOID Data,
+	IN ULONG Length
+	);

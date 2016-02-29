@@ -149,6 +149,13 @@ typedef struct _ATMEL_CONTEXT
 
 	mxt_message_t lastmsg;
 
+	mxt_rollup core;
+
+	struct mxt_object	*msgprocobj;
+	struct mxt_object	*cmdprocobj;
+
+	mxt_id_info info;
+
 	UINT32 TouchCount;
 
 	uint8_t      Flags[20];
@@ -159,6 +166,28 @@ typedef struct _ATMEL_CONTEXT
 
 	USHORT    AREA[20];
 
+	uint16_t max_x;
+	uint16_t max_y;
+
+	uint8_t max_x_hid[2];
+	uint8_t max_y_hid[2];
+
+	uint8_t num_touchids;
+	uint8_t multitouch;
+
+	/* Cached parameters from object table */
+	uint16_t T5_address;
+	uint8_t T5_msg_size;
+	uint8_t T6_reportid;
+	uint16_t T6_address;
+	uint16_t T7_address;
+	uint8_t T9_reportid_min;
+	uint8_t T9_reportid_max;
+	uint8_t T19_reportid;
+	uint16_t T44_address;
+	uint8_t T100_reportid_min;
+	uint8_t T100_reportid_max;
+
 } ATMEL_CONTEXT, *PATMEL_CONTEXT;
 
 WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(ATMEL_CONTEXT, GetDeviceContext)
@@ -167,7 +196,9 @@ WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(ATMEL_CONTEXT, GetDeviceContext)
 // Function definitions
 //
 
-DRIVER_INITIALIZE DriverEntry;
+extern "C" {
+	DRIVER_INITIALIZE DriverEntry;
+}
 
 EVT_WDF_DRIVER_UNLOAD AtmelDriverUnload;
 
@@ -251,7 +282,7 @@ IN ULONG        IoControlCode
 #define DBG_PNP   2
 #define DBG_IOCTL 4
 
-#if DBG
+#if 0
 #define AtmelPrint(dbglevel, dbgcatagory, fmt, ...) {          \
     if (AtmelDebugLevel >= dbglevel &&                         \
         (AtmelDebugCatagories && dbgcatagory))                 \
