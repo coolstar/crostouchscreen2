@@ -143,6 +143,48 @@ static NTSTATUS mxt_read_t9_resolution(PATMEL_CONTEXT devContext)
 	return STATUS_SUCCESS;
 }
 
+static NTSTATUS mxt_read_t100_config(PATMEL_CONTEXT devContext)
+{
+	uint16_t range_x, range_y;
+	uint8_t cfg, tchaux;
+	uint8_t aux;
+
+	mxt_rollup core = devContext->core;
+	mxt_object *resolutionobject = mxt_findobject(&core, MXT_TOUCH_MULTITOUCHSCREEN_T100);
+
+	/* read touchscreen dimensions */
+	mxt_read_reg(devContext, resolutionobject->start_address + MXT_T100_XRANGE, &range_x, sizeof(range_x));
+
+	mxt_read_reg(devContext, resolutionobject->start_address + MXT_T100_YRANGE, &range_y, sizeof(range_y));
+
+	/* read orientation config */
+	mxt_read_reg(devContext, resolutionobject->start_address + MXT_T100_CFG1, &cfg, 1);
+
+	if (cfg & MXT_T100_CFG_SWITCHXY) {
+		devContext->max_x = range_y + 1;
+		devContext->max_y = range_x + 1;
+	}
+	else {
+		devContext->max_x = range_x + 1;
+		devContext->max_y = range_y + 1;
+	}
+
+	mxt_read_reg(devContext, resolutionobject->start_address + MXT_T100_TCHAUX, &tchaux, 1);
+
+	aux = 6;
+
+	if (tchaux & MXT_T100_TCHAUX_VECT)
+		devContext->t100_aux_vect = aux++;
+
+	if (tchaux & MXT_T100_TCHAUX_AMPL)
+		devContext->t100_aux_ampl = aux++;
+
+	if (tchaux & MXT_T100_TCHAUX_AREA)
+		devContext->t100_aux_area = aux++;
+	AtmelPrint(DEBUG_LEVEL_INFO, DBG_PNP, "Screen Size: X: %d Y: %d\n", devContext->max_x, devContext->max_y);
+	return STATUS_SUCCESS;
+}
+
 NTSTATUS BOOTTOUCHSCREEN(
 	_In_  PATMEL_CONTEXT  devContext
 	)
@@ -257,6 +299,8 @@ NTSTATUS BOOTTOUCHSCREEN(
 
 	if (devContext->multitouch == MXT_TOUCH_MULTI_T9)
 		mxt_read_t9_resolution(devContext);
+	else if (devContext->multitouch == MXT_TOUCH_MULTITOUCHSCREEN_T100)
+		mxt_read_t100_config(devContext);
 
 	if (devContext->multitouch == MXT_TOUCH_MULTI_T9 || devContext->multitouch == MXT_TOUCH_MULTITOUCHSCREEN_T100) {
 		uint16_t max_x[] = { devContext->max_x };
@@ -502,16 +546,39 @@ BOOLEAN OnInterruptIsr(
 
 	int reportid = msg.any.reportid;
 
-	if (reportid != 0xff){
-		int rawx = (msg.touch.pos[0] << 4) |
-			((msg.touch.pos[2] >> 4) & 0x0F);
-		int rawy = ((msg.touch.pos[1] << 4) |
-			((msg.touch.pos[2]) & 0x0F)) / 4;
+	if (reportid == 0xff) {
+	} else if (reportid >= pDevice->T9_reportid_min && reportid <= pDevice->T9_reportid_max){
+		reportid = reportid - pDevice->T9_reportid_min;
 
-		pDevice->Flags[reportid] = msg.touch.flags;
+		int rawx = (msg.touch_t9.pos[0] << 4) |
+			((msg.touch_t9.pos[2] >> 4) & 0x0F);
+		int rawy = ((msg.touch_t9.pos[1] << 4) |
+			((msg.touch_t9.pos[2]) & 0x0F)) / 4;
+
+		pDevice->Flags[reportid] = msg.touch_t9.flags;
 		pDevice->XValue[reportid] = rawx;
 		pDevice->YValue[reportid] = rawy;
-		pDevice->AREA[reportid] = msg.touch.area;
+		pDevice->AREA[reportid] = msg.touch_t9.area;
+	}
+	else if (reportid >= pDevice->T100_reportid_min && reportid <= pDevice->T100_reportid_max) {
+		reportid = reportid - pDevice->T100_reportid_min - 2;
+
+		if (reportid > 0) {
+			uint8_t t9_flags = 0; //convert T100 flags to T9
+			if (msg.touch_t100.flags & MXT_T100_DETECT)
+				t9_flags = t9_flags & MXT_T9_DETECT;
+			else if (pDevice->Flags[reportid] & MXT_T100_DETECT)
+				t9_flags = t9_flags & MXT_T9_RELEASE;
+
+			pDevice->Flags[reportid] = t9_flags;
+
+			int rawx = msg.touch_t100.x;
+			int rawy = msg.touch_t100.y;
+
+			pDevice->XValue[reportid] = rawx;
+			pDevice->YValue[reportid] = rawy;
+			pDevice->AREA[reportid] = 10;
+		}
 	}
 
 	struct _ATMEL_MULTITOUCH_REPORT report;

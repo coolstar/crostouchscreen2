@@ -155,7 +155,7 @@ __packed(struct mxt_message_any{
 	uint8_t	data[7];
 });
 
-__packed(struct mxt_message_touch{
+__packed(struct mxt_message_touch_t9{
 	uint8_t reportid;
 	uint8_t flags;		/* msg[0] */
 	uint8_t pos[3];		/* xxxxxxxx(hi) yyyyyyyy(hi) xxxxyyyy(lo) */
@@ -184,12 +184,52 @@ __packed(struct t9_range {
 });
 #define MXT_T9_ORIENT_SWITCH    (1 << 0)
 
-__packed(union mxt_message{
-	struct mxt_message_touch any;
-	struct mxt_message_touch touch;
+typedef union mxt_message mxt_message_t;
+
+/* T100 Multiple Touch Touchscreen */
+#define MXT_T100_CTRL		0
+#define MXT_T100_CFG1		1
+#define MXT_T100_TCHAUX		3
+#define MXT_T100_XRANGE		13
+#define MXT_T100_YRANGE		24
+
+#define MXT_T100_CFG_SWITCHXY	BIT(5)
+
+#define MXT_T100_TCHAUX_VECT	BIT(0)
+#define MXT_T100_TCHAUX_AMPL	BIT(1)
+#define MXT_T100_TCHAUX_AREA	BIT(2)
+
+#define MXT_T100_DETECT		BIT(7)
+#define MXT_T100_TYPE_MASK	0x70
+
+enum t100_type {
+	MXT_T100_TYPE_FINGER = 1,
+	MXT_T100_TYPE_PASSIVE_STYLUS = 2,
+	MXT_T100_TYPE_HOVERING_FINGER = 4,
+	MXT_T100_TYPE_GLOVE = 5,
+	MXT_T100_TYPE_LARGE_TOUCH = 6,
+};
+
+#define MXT_DISTANCE_ACTIVE_TOUCH	0
+#define MXT_DISTANCE_HOVERING		1
+
+#define MXT_TOUCH_MAJOR_DEFAULT		1
+#define MXT_PRESSURE_DEFAULT		1
+
+__packed(struct mxt_message_touch_t100 {
+	uint8_t reportid;
+	uint8_t flags;		/* msg[0] */
+	uint16_t x;
+	uint16_t y;
+	uint8_t area;
+	uint8_t amplitude;
 });
 
-typedef union mxt_message mxt_message_t;
+__packed(union mxt_message {
+	struct mxt_message_any any;
+	struct mxt_message_touch_t9 touch_t9;
+	struct mxt_message_touch_t100 touch_t100;
+});
 
 /*
 * Object types

@@ -175,6 +175,10 @@ typedef struct _ATMEL_CONTEXT
 	uint8_t num_touchids;
 	uint8_t multitouch;
 
+	uint8_t t100_aux_ampl;
+	uint8_t t100_aux_area;
+	uint8_t t100_aux_vect;
+
 	/* Cached parameters from object table */
 	uint16_t T5_address;
 	uint8_t T5_msg_size;
