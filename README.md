@@ -1,5 +1,5 @@
 # crostouchscreen2
-Atmel MaxTouch Touch Screen Driver for Acer C720P.
+Atmel MaxTouch Touch Screen Driver for Acer C720P and Chromebook Pixel 2.
 
 Tested on Acer C720P. Works with up to 10 touches.
 
