@@ -1188,10 +1188,42 @@ IN WDFREQUEST Request
 	ULONG_PTR           bytesToCopy;
 	WDFMEMORY           memory;
 
+	PATMEL_CONTEXT devContext = GetDeviceContext(Device);
+
 	UNREFERENCED_PARAMETER(Device);
 
 	AtmelPrint(DEBUG_LEVEL_VERBOSE, DBG_IOCTL,
 		"AtmelGetReportDescriptor Entry\n");
+
+	#define MT_TOUCH_COLLECTION												\
+			MT_TOUCH_COLLECTION0 \
+			0x26, devContext->max_x_hid[0], devContext->max_x_hid[1],                   /*       LOGICAL_MAXIMUM (WIDTH)    */ \
+			MT_TOUCH_COLLECTION1 \
+			0x26, devContext->max_y_hid[0], devContext->max_y_hid[1],                   /*       LOGICAL_MAXIMUM (HEIGHT)    */ \
+			MT_TOUCH_COLLECTION2 \
+
+	HID_REPORT_DESCRIPTOR ReportDescriptor[] = {
+		//
+		// Multitouch report starts here
+		//
+		0x05, 0x0d,                         // USAGE_PAGE (Digitizers)
+		0x09, 0x04,                         // USAGE (Touch Screen)
+		0xa1, 0x01,                         // COLLECTION (Application)
+		0x85, REPORTID_MTOUCH,              //   REPORT_ID (Touch)
+		0x09, 0x22,                         //   USAGE (Finger)
+		MT_TOUCH_COLLECTION
+		MT_TOUCH_COLLECTION
+		MT_TOUCH_COLLECTION
+		MT_TOUCH_COLLECTION
+		MT_TOUCH_COLLECTION
+		MT_TOUCH_COLLECTION
+		MT_TOUCH_COLLECTION
+		MT_TOUCH_COLLECTION
+		MT_TOUCH_COLLECTION
+		MT_TOUCH_COLLECTION
+		USAGE_PAGE
+		0xc0,                               // END_COLLECTION
+	};
 
 	//
 	// This IOCTL is METHOD_NEITHER so WdfRequestRetrieveOutputMemory
@@ -1228,7 +1260,7 @@ IN WDFREQUEST Request
 
 	status = WdfMemoryCopyFromBuffer(memory,
 		0,
-		(PVOID)DefaultReportDescriptor,
+		(PVOID)ReportDescriptor,
 		bytesToCopy);
 	if (!NT_SUCCESS(status))
 	{

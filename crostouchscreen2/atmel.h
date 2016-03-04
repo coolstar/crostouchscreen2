@@ -33,7 +33,7 @@
 #define NTDEVICE_NAME_STRING       L"\\Device\\ATML0001"
 #define SYMBOLIC_NAME_STRING       L"\\DosDevices\\ATML0001"
 
-#define MT_TOUCH_COLLECTION                                                    \
+#define MT_TOUCH_COLLECTION0                                                    \
     0xa1, 0x02,                         /*     COLLECTION (Logical)         */ \
     0x09, 0x42,                         /*       USAGE (Tip Switch)         */ \
     0x15, 0x00,                         /*       LOGICAL_MINIMUM (0)        */ \
@@ -56,11 +56,18 @@
     0x55, 0x00,                         /*       UNIT_EXPONENT (0)          */ \
     0x65, 0x00,                         /*       UNIT (None)                */ \
     0x35, 0x00,                         /*       PHYSICAL_MINIMUM (0)       */ \
-    0x46, 0x00, 0x00,                   /*       PHYSICAL_MAXIMUM (0)       */ \
-	0x26, 0x56, 0x05,                   /*       LOGICAL_MAXIMUM (1366)    */ \
+    0x46, 0x00, 0x00,                   /*       PHYSICAL_MAXIMUM (0)       */ 
+
+
+	//0x26, 0x56, 0x05,                   /*       LOGICAL_MAXIMUM (1366)    */
+
+#define MT_TOUCH_COLLECTION1												\
     0x09, 0x30,                         /*       USAGE (X)                  */ \
-    0x81, 0x02,                         /*       INPUT (Data,Var,Abs)       */ \
-	0x26, 0x00, 0x03,                   /*       LOGICAL_MAXIMUM (768)    */ \
+    0x81, 0x02,                         /*       INPUT (Data,Var,Abs)       */ 
+
+	//0x26, 0x00, 0x03,                   /*       LOGICAL_MAXIMUM (768)    */ 
+
+#define MT_TOUCH_COLLECTION2												\
     0x09, 0x31,                         /*       USAGE (Y)                  */ \
     0x81, 0x02,                         /*       INPUT (Data,Var,Abs)       */ \
     0x05, 0x0d,                         /*       USAGE PAGE (Digitizers)    */ \
@@ -69,6 +76,29 @@
     0x09, 0x49,                         /*       USAGE (Height)             */ \
     0x81, 0x02,                         /*       INPUT (Data,Var,Abs)       */ \
     0xc0,                               /*    END_COLLECTION                */
+
+#if 0
+0x26, 0x56, 0x05,                   /*       LOGICAL_MAXIMUM (1366)    */ 
+0x26, 0x00, 0x03,                   /*       LOGICAL_MAXIMUM (768)    */ 
+#endif
+
+#define MT_REF_TOUCH_COLLECTION												\
+	MT_TOUCH_COLLECTION0 \
+	0x26, 0x00, 0x00,                   /*       LOGICAL_MAXIMUM (1366)    */ \
+	MT_TOUCH_COLLECTION1 \
+	0x26, 0x00, 0x00,                   /*       LOGICAL_MAXIMUM (768)    */ \
+	MT_TOUCH_COLLECTION2 \
+
+#define USAGE_PAGE \
+	0x05, 0x0d,                         /*    USAGE_PAGE (Digitizers) */  \
+	0x09, 0x54,                         /*    USAGE (Contact Count) */  \
+	0x95, 0x01,                         /*    REPORT_COUNT (1) */  \
+	0x75, 0x08,                         /*    REPORT_SIZE (8) */  \
+	0x15, 0x00,                         /*    LOGICAL_MINIMUM (0) */  \
+	0x25, 0x08,                         /*    LOGICAL_MAXIMUM (8) */  \
+	0x81, 0x02,                         /*    INPUT (Data,Var,Abs) */  \
+	0x09, 0x55,                         /*    USAGE(Contact Count Maximum) */  \
+	0xb1, 0x02,                         /*    FEATURE (Data,Var,Abs) */  \
 
 //
 // This is the default report descriptor for the Hid device provided
@@ -87,25 +117,17 @@ HID_REPORT_DESCRIPTOR DefaultReportDescriptor[] = {
 	0xa1, 0x01,                         // COLLECTION (Application)
 	0x85, REPORTID_MTOUCH,              //   REPORT_ID (Touch)
 	0x09, 0x22,                         //   USAGE (Finger)
-	MT_TOUCH_COLLECTION
-	MT_TOUCH_COLLECTION
-	MT_TOUCH_COLLECTION
-	MT_TOUCH_COLLECTION
-	MT_TOUCH_COLLECTION
-	MT_TOUCH_COLLECTION
-	MT_TOUCH_COLLECTION
-	MT_TOUCH_COLLECTION
-	MT_TOUCH_COLLECTION
-	MT_TOUCH_COLLECTION
-	0x05, 0x0d,                         //    USAGE_PAGE (Digitizers)
-	0x09, 0x54,                         //    USAGE (Contact Count)
-	0x95, 0x01,                         //    REPORT_COUNT (1)
-	0x75, 0x08,                         //    REPORT_SIZE (8)
-	0x15, 0x00,                         //    LOGICAL_MINIMUM (0)
-	0x25, 0x08,                         //    LOGICAL_MAXIMUM (8)
-	0x81, 0x02,                         //    INPUT (Data,Var,Abs)
-	0x09, 0x55,                         //    USAGE(Contact Count Maximum)
-	0xb1, 0x02,                         //    FEATURE (Data,Var,Abs)
+	MT_REF_TOUCH_COLLECTION
+	MT_REF_TOUCH_COLLECTION
+	MT_REF_TOUCH_COLLECTION
+	MT_REF_TOUCH_COLLECTION
+	MT_REF_TOUCH_COLLECTION
+	MT_REF_TOUCH_COLLECTION
+	MT_REF_TOUCH_COLLECTION
+	MT_REF_TOUCH_COLLECTION
+	MT_REF_TOUCH_COLLECTION
+	MT_REF_TOUCH_COLLECTION
+	USAGE_PAGE
 	0xc0,                               // END_COLLECTION
 };
 

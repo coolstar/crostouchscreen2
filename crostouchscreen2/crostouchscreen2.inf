@@ -76,5 +76,5 @@ LoadOrderGroup = Base
 SPSVCINST_ASSOCSERVICE= 0x00000002
 StdMfg                 = "CoolStar"
 DiskId1                = "CrosTouchScreen Installation Disk #1"
-CrosTouchScreen.DeviceDesc = "Acer C720P Atmel MaxTouch Touch Screen"
+CrosTouchScreen.DeviceDesc = "Chromebook Atmel MaxTouch Touch Screen"
 CrosTouchScreen.SVCDESC    = "CrosTouchScreen Service"
