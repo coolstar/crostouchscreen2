@@ -197,6 +197,8 @@ typedef struct _ATMEL_CONTEXT
 	uint8_t num_touchids;
 	uint8_t multitouch;
 
+	struct t7_config t7_cfg;
+
 	uint8_t t100_aux_ampl;
 	uint8_t t100_aux_area;
 	uint8_t t100_aux_vect;

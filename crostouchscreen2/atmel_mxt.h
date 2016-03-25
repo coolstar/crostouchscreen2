@@ -155,6 +155,15 @@ __packed(struct mxt_message_any{
 	uint8_t	data[7];
 });
 
+/* MXT_GEN_POWER_T7 field */
+__packed(struct t7_config {
+	uint8_t idle;
+	uint8_t active;
+});
+
+#define MXT_POWER_CFG_RUN		0
+#define MXT_POWER_CFG_DEEPSLEEP		1
+
 __packed(struct mxt_message_touch_t9{
 	uint8_t reportid;
 	uint8_t flags;		/* msg[0] */

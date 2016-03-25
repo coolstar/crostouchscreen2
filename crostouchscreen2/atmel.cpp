@@ -181,7 +181,7 @@ static NTSTATUS mxt_read_t100_config(PATMEL_CONTEXT devContext)
 
 	if (tchaux & MXT_T100_TCHAUX_AREA)
 		devContext->t100_aux_area = aux++;
-	AtmelPrint(DEBUG_LEVEL_INFO, DBG_PNP, "Screen Size: X: %d Y: %d\n", devContext->max_x, devContext->max_y);
+	AtmelPrint(DEBUG_LEVEL_INFO, DBG_PNP, "Screen Size T100: X: %d Y: %d\n", devContext->max_x, devContext->max_y);
 	return STATUS_SUCCESS;
 }
 
@@ -290,6 +290,7 @@ NTSTATUS BOOTTOUCHSCREEN(
 			devContext->multitouch = MXT_TOUCH_MULTITOUCHSCREEN_T100;
 			devContext->T100_reportid_min = min_id;
 			devContext->T100_reportid_max = max_id;
+
 			/* first two report IDs reserved */
 			devContext->num_touchids = obj->num_report_ids - 2;
 			break;
@@ -530,24 +531,15 @@ Status
 	return STATUS_SUCCESS;
 }
 
-BOOLEAN OnInterruptIsr(
-	WDFINTERRUPT Interrupt,
-	ULONG MessageID){
-	UNREFERENCED_PARAMETER(MessageID);
-
-	WDFDEVICE Device = WdfInterruptGetDevice(Interrupt);
-	PATMEL_CONTEXT pDevice = GetDeviceContext(Device);
-
-	if (!pDevice->ConnectInterrupt)
-		return true;
-
+void AtmelDeviceRead(PATMEL_CONTEXT pDevice) {
 	mxt_message_t msg;
 	SpbReadDataSynchronously(&pDevice->I2CContext, 0, &msg, sizeof(msg));
 
 	int reportid = msg.any.reportid;
 
 	if (reportid == 0xff) {
-	} else if (reportid >= pDevice->T9_reportid_min && reportid <= pDevice->T9_reportid_max){
+	}
+	else if (reportid >= pDevice->T9_reportid_min && reportid <= pDevice->T9_reportid_max) {
 		reportid = reportid - pDevice->T9_reportid_min;
 
 		int rawx = (msg.touch_t9.pos[0] << 4) |
@@ -563,17 +555,17 @@ BOOLEAN OnInterruptIsr(
 	else if (reportid >= pDevice->T100_reportid_min && reportid <= pDevice->T100_reportid_max) {
 		reportid = reportid - pDevice->T100_reportid_min - 2;
 
-		if (reportid > 0) {
-			uint8_t t9_flags = 0; //convert T100 flags to T9
-			if (msg.touch_t100.flags & MXT_T100_DETECT)
-				t9_flags = t9_flags & MXT_T9_DETECT;
-			else if (pDevice->Flags[reportid] & MXT_T100_DETECT)
-				t9_flags = t9_flags & MXT_T9_RELEASE;
+		uint8_t t9_flags = 0; //convert T100 flags to T9
+		if (msg.touch_t100.flags & MXT_T100_DETECT)
+			t9_flags += MXT_T9_DETECT;
+		else if (pDevice->Flags[reportid] & MXT_T100_DETECT) 
+			t9_flags += MXT_T9_RELEASE;
 
+		int rawx = msg.touch_t100.x;
+		int rawy = msg.touch_t100.y;
+
+		if (reportid >= 0) {
 			pDevice->Flags[reportid] = t9_flags;
-
-			int rawx = msg.touch_t100.x;
-			int rawy = msg.touch_t100.y;
 
 			pDevice->XValue[reportid] = rawx;
 			pDevice->YValue[reportid] = rawy;
@@ -585,8 +577,8 @@ BOOLEAN OnInterruptIsr(
 	report.ReportID = REPORTID_MTOUCH;
 
 	int count = 0, i = 0;
-	while (count < 10 && i < 20){
-		if (pDevice->Flags[i] != 0){
+	while (count < 10 && i < 20) {
+		if (pDevice->Flags[i] != 0) {
 			report.Touch[count].ContactID = i;
 			report.Touch[count].Height = pDevice->AREA[i];
 			report.Touch[count].Width = pDevice->AREA[i];
@@ -595,13 +587,13 @@ BOOLEAN OnInterruptIsr(
 			report.Touch[count].YValue = pDevice->YValue[i];
 
 			uint8_t flags = pDevice->Flags[i];
-			if (flags & MXT_T9_DETECT){
+			if (flags & MXT_T9_DETECT) {
 				report.Touch[count].Status = MULTI_IN_RANGE_BIT | MULTI_CONFIDENCE_BIT | MULTI_TIPSWITCH_BIT;
 			}
-			else if (flags & MXT_T9_PRESS){
+			else if (flags & MXT_T9_PRESS) {
 				report.Touch[count].Status = MULTI_IN_RANGE_BIT | MULTI_CONFIDENCE_BIT | MULTI_TIPSWITCH_BIT;
 			}
-			else if (flags & MXT_T9_RELEASE){
+			else if (flags & MXT_T9_RELEASE) {
 				report.Touch[count].Status = 0;
 				pDevice->Flags[i] = 0;
 			}
@@ -615,34 +607,41 @@ BOOLEAN OnInterruptIsr(
 
 	report.ActualCount = count;
 
-	if (count > 0){
+	if (count > 0) {
 		size_t bytesWritten;
 		AtmelProcessVendorReport(pDevice, &report, sizeof(report), &bytesWritten);
 	}
 
 	pDevice->lastmsg = msg;
 	pDevice->RegsSet = true;
+}
+
+BOOLEAN OnInterruptIsr(
+	WDFINTERRUPT Interrupt,
+	ULONG MessageID){
+	UNREFERENCED_PARAMETER(MessageID);
+
+	WDFDEVICE Device = WdfInterruptGetDevice(Interrupt);
+	PATMEL_CONTEXT pDevice = GetDeviceContext(Device);
+
+	if (!pDevice->ConnectInterrupt)
+		return true;
+
+	if (pDevice->multitouch == MXT_TOUCH_MULTITOUCHSCREEN_T100)
+		return true;
+
+	AtmelDeviceRead(pDevice);
 
 	return true;
 }
 
-
-void CyapaTimerFunc(_In_ WDFTIMER hTimer){
-	WDFDEVICE Device = (WDFDEVICE)WdfTimerGetParentObject(hTimer);
-	PATMEL_CONTEXT pDevice = GetDeviceContext(Device);
-
-	if (!pDevice->ConnectInterrupt)
-		return;
-
-	if (!pDevice->RegsSet)
-		return;
-
+void AtmelProcessInput(PATMEL_CONTEXT pDevice) {
 	struct _ATMEL_MULTITOUCH_REPORT report;
 	report.ReportID = REPORTID_MTOUCH;
 
 	int count = 0, i = 0;
-	while (count < 10 && i < 20){
-		if (pDevice->Flags[i] != 0){
+	while (count < 10 && i < 20) {
+		if (pDevice->Flags[i] != 0) {
 			report.Touch[count].ContactID = i;
 			report.Touch[count].Height = pDevice->AREA[i];
 			report.Touch[count].Width = pDevice->AREA[i];
@@ -651,13 +650,13 @@ void CyapaTimerFunc(_In_ WDFTIMER hTimer){
 			report.Touch[count].YValue = pDevice->YValue[i];
 
 			uint8_t flags = pDevice->Flags[i];
-			if (flags & MXT_T9_DETECT){
+			if (flags & MXT_T9_DETECT) {
 				report.Touch[count].Status = MULTI_IN_RANGE_BIT | MULTI_CONFIDENCE_BIT | MULTI_TIPSWITCH_BIT;
 			}
-			else if (flags & MXT_T9_PRESS){
+			else if (flags & MXT_T9_PRESS) {
 				report.Touch[count].Status = MULTI_IN_RANGE_BIT | MULTI_CONFIDENCE_BIT | MULTI_TIPSWITCH_BIT;
 			}
-			else if (flags & MXT_T9_RELEASE){
+			else if (flags & MXT_T9_RELEASE) {
 				report.Touch[count].Status = 0;
 				pDevice->Flags[i] = 0;
 			}
@@ -671,11 +670,64 @@ void CyapaTimerFunc(_In_ WDFTIMER hTimer){
 
 	report.ActualCount = count;
 
-	if (count > 0){
+	if (count > 0) {
 		size_t bytesWritten;
 		AtmelProcessVendorReport(pDevice, &report, sizeof(report), &bytesWritten);
 	}
+}
 
+VOID
+AtmelReadWriteWorkItem(
+	IN WDFWORKITEM  WorkItem
+	)
+{
+	WDFDEVICE Device = (WDFDEVICE)WdfWorkItemGetParentObject(WorkItem);
+	PATMEL_CONTEXT pDevice = GetDeviceContext(Device);
+
+	WdfObjectDelete(WorkItem);
+
+	if (!pDevice->ConnectInterrupt)
+		return;
+
+	if (pDevice->multitouch != MXT_TOUCH_MULTITOUCHSCREEN_T100) {
+		return;
+	}
+
+	AtmelDeviceRead(pDevice);
+
+	AtmelProcessInput(pDevice);
+}
+
+void AtmelTimerFunc(_In_ WDFTIMER hTimer){
+	WDFDEVICE Device = (WDFDEVICE)WdfTimerGetParentObject(hTimer);
+	PATMEL_CONTEXT pDevice = GetDeviceContext(Device);
+
+	if (!pDevice->ConnectInterrupt)
+		return;
+
+	if (pDevice->multitouch == MXT_TOUCH_MULTITOUCHSCREEN_T100) {
+		WDF_OBJECT_ATTRIBUTES attributes;
+		WDF_WORKITEM_CONFIG workitemConfig;
+		WDFWORKITEM hWorkItem;
+
+		WDF_OBJECT_ATTRIBUTES_INIT(&attributes);
+		WDF_OBJECT_ATTRIBUTES_SET_CONTEXT_TYPE(&attributes, ATMEL_CONTEXT);
+		attributes.ParentObject = Device;
+		WDF_WORKITEM_CONFIG_INIT(&workitemConfig, AtmelReadWriteWorkItem);
+
+		WdfWorkItemCreate(&workitemConfig,
+			&attributes,
+			&hWorkItem);
+
+		WdfWorkItemEnqueue(hWorkItem);
+
+		return;
+	}
+
+	if (!pDevice->RegsSet)
+		return;
+
+	AtmelProcessInput(pDevice);
 	return;
 }
 
@@ -834,7 +886,7 @@ IN PWDFDEVICE_INIT DeviceInit
 	WDF_TIMER_CONFIG              timerConfig;
 	WDFTIMER                      hTimer;
 
-	WDF_TIMER_CONFIG_INIT_PERIODIC(&timerConfig, CyapaTimerFunc, 10);
+	WDF_TIMER_CONFIG_INIT_PERIODIC(&timerConfig, AtmelTimerFunc, 10);
 
 	WDF_OBJECT_ATTRIBUTES_INIT(&attributes);
 	attributes.ParentObject = device;
