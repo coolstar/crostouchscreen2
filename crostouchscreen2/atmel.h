@@ -59,13 +59,13 @@
     0x46, 0x00, 0x00,                   /*       PHYSICAL_MAXIMUM (0)       */ 
 
 
-	//0x26, 0x56, 0x05,                   /*       LOGICAL_MAXIMUM (1366)    */
+//0x26, 0x56, 0x05,                   /*       LOGICAL_MAXIMUM (1366)    */
 
 #define MT_TOUCH_COLLECTION1												\
     0x09, 0x30,                         /*       USAGE (X)                  */ \
     0x81, 0x02,                         /*       INPUT (Data,Var,Abs)       */ 
 
-	//0x26, 0x00, 0x03,                   /*       LOGICAL_MAXIMUM (768)    */ 
+//0x26, 0x00, 0x03,                   /*       LOGICAL_MAXIMUM (768)    */ 
 
 #define MT_TOUCH_COLLECTION2												\
     0x09, 0x31,                         /*       USAGE (Y)                  */ \
@@ -78,8 +78,8 @@
     0xc0,                               /*    END_COLLECTION                */
 
 #if 0
-0x26, 0x56, 0x05,                   /*       LOGICAL_MAXIMUM (1366)    */ 
-0x26, 0x00, 0x03,                   /*       LOGICAL_MAXIMUM (768)    */ 
+0x26, 0x56, 0x05,                   /*       LOGICAL_MAXIMUM (1366)    */
+0x26, 0x00, 0x03,                   /*       LOGICAL_MAXIMUM (768)    */
 #endif
 
 #define MT_REF_TOUCH_COLLECTION												\
@@ -100,12 +100,12 @@
 	0x09, 0x55,                         /*    USAGE(Contact Count Maximum) */  \
 	0xb1, 0x02,                         /*    FEATURE (Data,Var,Abs) */  \
 
-//
-// This is the default report descriptor for the Hid device provided
-// by the mini driver in response to IOCTL_HID_GET_REPORT_DESCRIPTOR.
-// 
+									//
+									// This is the default report descriptor for the Hid device provided
+									// by the mini driver in response to IOCTL_HID_GET_REPORT_DESCRIPTOR.
+									// 
 
-typedef UCHAR HID_REPORT_DESCRIPTOR, *PHID_REPORT_DESCRIPTOR;
+	typedef UCHAR HID_REPORT_DESCRIPTOR, *PHID_REPORT_DESCRIPTOR;
 
 #ifdef DESCRIPTOR_DEF
 HID_REPORT_DESCRIPTOR DefaultReportDescriptor[] = {
@@ -154,6 +154,8 @@ CONST HID_DESCRIPTOR DefaultHidDescriptor = {
 
 typedef struct _ATMEL_CONTEXT
 {
+
+	WDFDEVICE FxDevice;
 
 	WDFQUEUE ReportQueue;
 
@@ -216,6 +218,12 @@ typedef struct _ATMEL_CONTEXT
 	uint8_t T100_reportid_min;
 	uint8_t T100_reportid_max;
 
+	uint8_t max_reportid;
+
+	uint8_t last_message_count;
+
+	uint8_t interrupt_count;
+
 } ATMEL_CONTEXT, *PATMEL_CONTEXT;
 
 WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(ATMEL_CONTEXT, GetDeviceContext)
@@ -238,64 +246,64 @@ EVT_WDF_IO_QUEUE_IO_INTERNAL_DEVICE_CONTROL AtmelEvtInternalDeviceControl;
 
 NTSTATUS
 AtmelGetHidDescriptor(
-IN WDFDEVICE Device,
-IN WDFREQUEST Request
+	IN WDFDEVICE Device,
+	IN WDFREQUEST Request
 );
 
 NTSTATUS
 AtmelGetReportDescriptor(
-IN WDFDEVICE Device,
-IN WDFREQUEST Request
+	IN WDFDEVICE Device,
+	IN WDFREQUEST Request
 );
 
 NTSTATUS
 AtmelGetDeviceAttributes(
-IN WDFREQUEST Request
+	IN WDFREQUEST Request
 );
 
 NTSTATUS
 AtmelGetString(
-IN WDFREQUEST Request
+	IN WDFREQUEST Request
 );
 
 NTSTATUS
 AtmelWriteReport(
-IN PATMEL_CONTEXT DevContext,
-IN WDFREQUEST Request
+	IN PATMEL_CONTEXT DevContext,
+	IN WDFREQUEST Request
 );
 
 NTSTATUS
 AtmelProcessVendorReport(
-IN PATMEL_CONTEXT DevContext,
-IN PVOID ReportBuffer,
-IN ULONG ReportBufferLen,
-OUT size_t* BytesWritten
+	IN PATMEL_CONTEXT DevContext,
+	IN PVOID ReportBuffer,
+	IN ULONG ReportBufferLen,
+	OUT size_t* BytesWritten
 );
 
 NTSTATUS
 AtmelReadReport(
-IN PATMEL_CONTEXT DevContext,
-IN WDFREQUEST Request,
-OUT BOOLEAN* CompleteRequest
+	IN PATMEL_CONTEXT DevContext,
+	IN WDFREQUEST Request,
+	OUT BOOLEAN* CompleteRequest
 );
 
 NTSTATUS
 AtmelSetFeature(
-IN PATMEL_CONTEXT DevContext,
-IN WDFREQUEST Request,
-OUT BOOLEAN* CompleteRequest
+	IN PATMEL_CONTEXT DevContext,
+	IN WDFREQUEST Request,
+	OUT BOOLEAN* CompleteRequest
 );
 
 NTSTATUS
 AtmelGetFeature(
-IN PATMEL_CONTEXT DevContext,
-IN WDFREQUEST Request,
-OUT BOOLEAN* CompleteRequest
+	IN PATMEL_CONTEXT DevContext,
+	IN WDFREQUEST Request,
+	OUT BOOLEAN* CompleteRequest
 );
 
 PCHAR
 DbgHidInternalIoctlString(
-IN ULONG        IoControlCode
+	IN ULONG        IoControlCode
 );
 
 //

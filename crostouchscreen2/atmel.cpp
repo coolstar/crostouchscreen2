@@ -4,10 +4,14 @@
 static ULONG AtmelDebugLevel = 100;
 static ULONG AtmelDebugCatagories = DBG_INIT || DBG_PNP || DBG_IOCTL;
 
+
+int AtmelProcessMessagesUntilInvalid(PATMEL_CONTEXT pDevice);
+VOID AtmelReadWriteWorkItem(IN WDFWORKITEM  WorkItem);
+
 NTSTATUS
 DriverEntry(
-__in PDRIVER_OBJECT  DriverObject,
-__in PUNICODE_STRING RegistryPath
+	__in PDRIVER_OBJECT  DriverObject,
+	__in PUNICODE_STRING RegistryPath
 )
 {
 	NTSTATUS               status = STATUS_SUCCESS;
@@ -30,7 +34,7 @@ __in PUNICODE_STRING RegistryPath
 		&attributes,
 		&config,
 		WDF_NO_HANDLE
-		);
+	);
 
 	if (!NT_SUCCESS(status))
 	{
@@ -132,12 +136,12 @@ static NTSTATUS mxt_read_t9_resolution(PATMEL_CONTEXT devContext)
 		range.y = 1023;
 
 	if (orient & MXT_T9_ORIENT_SWITCH) {
-		devContext->max_x = range.y+1;
-		devContext->max_y = range.x+1;
+		devContext->max_x = range.y + 1;
+		devContext->max_y = range.x + 1;
 	}
 	else {
-		devContext->max_x = range.x+1;
-		devContext->max_y = range.y+1;
+		devContext->max_x = range.x + 1;
+		devContext->max_y = range.y + 1;
 	}
 	AtmelPrint(DEBUG_LEVEL_INFO, DBG_PNP, "Screen Size: X: %d Y: %d\n", devContext->max_x, devContext->max_y);
 	return STATUS_SUCCESS;
@@ -185,9 +189,44 @@ static NTSTATUS mxt_read_t100_config(PATMEL_CONTEXT devContext)
 	return STATUS_SUCCESS;
 }
 
+VOID
+AtmelBootWorkItem(
+	IN WDFWORKITEM  WorkItem
+)
+{
+	WDFDEVICE Device = (WDFDEVICE)WdfWorkItemGetParentObject(WorkItem);
+	PATMEL_CONTEXT pDevice = GetDeviceContext(Device);
+
+	uint8_t test[8];
+	mxt_read_reg(pDevice, pDevice->T44_address, test, 0x07);
+
+	WdfObjectDelete(WorkItem);
+}
+
+void AtmelBootTimer(_In_ WDFTIMER hTimer) {
+	WDFDEVICE Device = (WDFDEVICE)WdfTimerGetParentObject(hTimer);
+	PATMEL_CONTEXT pDevice = GetDeviceContext(Device);
+
+	WDF_OBJECT_ATTRIBUTES attributes;
+	WDF_WORKITEM_CONFIG workitemConfig;
+	WDFWORKITEM hWorkItem;
+
+	WDF_OBJECT_ATTRIBUTES_INIT(&attributes);
+	WDF_OBJECT_ATTRIBUTES_SET_CONTEXT_TYPE(&attributes, ATMEL_CONTEXT);
+	attributes.ParentObject = Device;
+	WDF_WORKITEM_CONFIG_INIT(&workitemConfig, AtmelBootWorkItem);
+
+	WdfWorkItemCreate(&workitemConfig,
+		&attributes,
+		&hWorkItem);
+
+	WdfWorkItemEnqueue(hWorkItem);
+	WdfTimerStop(hTimer, FALSE);
+}
+
 NTSTATUS BOOTTOUCHSCREEN(
 	_In_  PATMEL_CONTEXT  devContext
-	)
+)
 {
 	int blksize;
 	int totsize;
@@ -295,8 +334,11 @@ NTSTATUS BOOTTOUCHSCREEN(
 			devContext->num_touchids = obj->num_report_ids - 2;
 			break;
 		}
-		AtmelPrint(DEBUG_LEVEL_INFO, DBG_PNP, "Obj Type: %d\n", obj->type);
 	}
+
+	devContext->max_reportid = reportid;
+
+	AtmelProcessMessagesUntilInvalid(devContext);
 
 	if (devContext->multitouch == MXT_TOUCH_MULTI_T9)
 		mxt_read_t9_resolution(devContext);
@@ -319,14 +361,28 @@ NTSTATUS BOOTTOUCHSCREEN(
 
 	atmel_reset_device(devContext);
 
-	return STATUS_SUCCESS;
+	devContext->ConnectInterrupt = false;
+
+	WDF_TIMER_CONFIG              timerConfig;
+	WDFTIMER                      hTimer;
+	WDF_OBJECT_ATTRIBUTES         attributes;
+
+	WDF_TIMER_CONFIG_INIT(&timerConfig, AtmelBootTimer);
+
+	WDF_OBJECT_ATTRIBUTES_INIT(&attributes);
+	attributes.ParentObject = devContext->FxDevice;
+	NTSTATUS status = WdfTimerCreate(&timerConfig, &attributes, &hTimer);
+
+	WdfTimerStart(hTimer, WDF_REL_TIMEOUT_IN_MS(200));
+
+	return status;
 }
 
 NTSTATUS
 OnPrepareHardware(
-_In_  WDFDEVICE     FxDevice,
-_In_  WDFCMRESLIST  FxResourcesRaw,
-_In_  WDFCMRESLIST  FxResourcesTranslated
+	_In_  WDFDEVICE     FxDevice,
+	_In_  WDFCMRESLIST  FxResourcesRaw,
+	_In_  WDFCMRESLIST  FxResourcesTranslated
 )
 /*++
 
@@ -423,8 +479,8 @@ Status
 
 NTSTATUS
 OnReleaseHardware(
-_In_  WDFDEVICE     FxDevice,
-_In_  WDFCMRESLIST  FxResourcesTranslated
+	_In_  WDFDEVICE     FxDevice,
+	_In_  WDFCMRESLIST  FxResourcesTranslated
 )
 /*++
 
@@ -461,8 +517,8 @@ Status
 
 NTSTATUS
 OnD0Entry(
-_In_  WDFDEVICE               FxDevice,
-_In_  WDF_POWER_DEVICE_STATE  FxPreviousState
+	_In_  WDFDEVICE               FxDevice,
+	_In_  WDF_POWER_DEVICE_STATE  FxPreviousState
 )
 /*++
 
@@ -488,7 +544,7 @@ Status
 
 	WdfTimerStart(pDevice->Timer, WDF_REL_TIMEOUT_IN_MS(10));
 
-	for (int i = 0; i < 20; i++){
+	for (int i = 0; i < 20; i++) {
 		pDevice->Flags[i] = 0;
 	}
 
@@ -500,8 +556,8 @@ Status
 
 NTSTATUS
 OnD0Exit(
-_In_  WDFDEVICE               FxDevice,
-_In_  WDF_POWER_DEVICE_STATE  FxPreviousState
+	_In_  WDFDEVICE               FxDevice,
+	_In_  WDF_POWER_DEVICE_STATE  FxPreviousState
 )
 /*++
 
@@ -531,38 +587,49 @@ Status
 	return STATUS_SUCCESS;
 }
 
-void AtmelDeviceRead(PATMEL_CONTEXT pDevice) {
-	mxt_message_t msg;
-	SpbReadDataSynchronously(&pDevice->I2CContext, 0, &msg, sizeof(msg));
+int AtmelProcessMessage(PATMEL_CONTEXT pDevice, uint8_t *message) {
+	uint8_t report_id = message[0];
 
-	int reportid = msg.any.reportid;
+	if (report_id == 0xff)
+		return 0;
 
-	if (reportid == 0xff) {
+	if (report_id == pDevice->T6_reportid) {
+		uint8_t status = message[1];
+		uint32_t crc = message[2] | (message[3] << 8) | (message[4] << 16);
 	}
-	else if (reportid >= pDevice->T9_reportid_min && reportid <= pDevice->T9_reportid_max) {
-		reportid = reportid - pDevice->T9_reportid_min;
+	else if (report_id >= pDevice->T9_reportid_min && report_id <= pDevice->T9_reportid_max) {
+		uint8_t flags = message[1];
 
-		int rawx = (msg.touch_t9.pos[0] << 4) |
-			((msg.touch_t9.pos[2] >> 4) & 0x0F);
-		int rawy = ((msg.touch_t9.pos[1] << 4) |
-			((msg.touch_t9.pos[2]) & 0x0F)) / 4;
+		int rawx = (message[2] << 4) | ((message[4] >> 4) & 0xf);
+		int rawy = (message[3] << 4) | ((message[4] & 0xf));
 
-		pDevice->Flags[reportid] = msg.touch_t9.flags;
-		pDevice->XValue[reportid] = rawx;
-		pDevice->YValue[reportid] = rawy;
-		pDevice->AREA[reportid] = msg.touch_t9.area;
+		/* Handle 10/12 bit switching */
+		if (pDevice->max_x < 1024)
+			rawx >>= 2;
+		if (pDevice->max_y < 1024)
+			rawy >>= 2;
+
+		uint8_t area = message[5];
+		uint8_t ampl = message[6];
+
+		pDevice->Flags[report_id] = flags;
+		pDevice->XValue[report_id] = rawx;
+		pDevice->YValue[report_id] = rawy;
+		pDevice->AREA[report_id] = area;
 	}
-	else if (reportid >= pDevice->T100_reportid_min && reportid <= pDevice->T100_reportid_max) {
-		reportid = reportid - pDevice->T100_reportid_min - 2;
+	else if (report_id >= pDevice->T100_reportid_min && report_id <= pDevice->T100_reportid_max) {
+		int reportid = report_id - pDevice->T100_reportid_min - 2;
+
+		uint8_t flags = message[1];
 
 		uint8_t t9_flags = 0; //convert T100 flags to T9
-		if (msg.touch_t100.flags & MXT_T100_DETECT)
+		if (flags & MXT_T100_DETECT)
 			t9_flags += MXT_T9_DETECT;
-		else if (pDevice->Flags[reportid] & MXT_T100_DETECT) 
+		else if (pDevice->Flags[reportid] & MXT_T100_DETECT)
 			t9_flags += MXT_T9_RELEASE;
 
-		int rawx = msg.touch_t100.x;
-		int rawy = msg.touch_t100.y;
+		int rawx = *((uint16_t *)&message[2]);
+		int rawy = *((uint16_t *)&message[4]);
 
 		if (reportid >= 0) {
 			pDevice->Flags[reportid] = t9_flags;
@@ -611,26 +678,117 @@ void AtmelDeviceRead(PATMEL_CONTEXT pDevice) {
 		size_t bytesWritten;
 		AtmelProcessVendorReport(pDevice, &report, sizeof(report), &bytesWritten);
 	}
-
-	pDevice->lastmsg = msg;
 	pDevice->RegsSet = true;
+	return 1;
 }
 
-BOOLEAN OnInterruptIsr(
-	WDFINTERRUPT Interrupt,
-	ULONG MessageID){
-	UNREFERENCED_PARAMETER(MessageID);
+int AtmelReadAndProcessMessages(PATMEL_CONTEXT pDevice, uint8_t count) {
+	uint8_t num_valid = 0;
+	int i, ret;
+	if (count > pDevice->max_reportid)
+		return -1;
 
-	WDFDEVICE Device = WdfInterruptGetDevice(Interrupt);
-	PATMEL_CONTEXT pDevice = GetDeviceContext(Device);
+	uint8_t *msg_buf = (uint8_t *)ExAllocatePoolWithTag(NonPagedPool, pDevice->max_reportid * pDevice->T5_msg_size, ATMEL_POOL_TAG);
 
-	if (!pDevice->ConnectInterrupt)
-		return true;
+	for (int i = 0; i < pDevice->max_reportid * pDevice->T5_msg_size; i++) {
+		msg_buf[i] = 0xff;
+	}
 
-	if (pDevice->multitouch == MXT_TOUCH_MULTITOUCHSCREEN_T100)
-		return true;
+	mxt_read_reg(pDevice, pDevice->T5_address, msg_buf, pDevice->T5_msg_size * count);
 
-	AtmelDeviceRead(pDevice);
+	for (i = 0; i < count; i++) {
+		ret = AtmelProcessMessage(pDevice,
+			msg_buf + pDevice->T5_msg_size * i);
+
+		if (ret == 1)
+			num_valid++;
+	}
+
+	ExFreePoolWithTag(msg_buf, ATMEL_POOL_TAG);
+
+	/* return number of messages read */
+	return num_valid;
+}
+
+int AtmelProcessMessagesUntilInvalid(PATMEL_CONTEXT pDevice) {
+	int count, read;
+	uint8_t tries = 2;
+
+	count = pDevice->max_reportid;
+	do {
+		read = AtmelReadAndProcessMessages(pDevice, count);
+		if (read < count)
+			return 0;
+	} while (--tries);
+	return -1;
+}
+
+bool AtmelDeviceReadT44(PATMEL_CONTEXT pDevice) {
+	NTSTATUS stret, ret;
+	uint8_t count, num_left;
+
+	uint8_t *msg_buf = (uint8_t *)ExAllocatePoolWithTag(NonPagedPool, pDevice->T5_msg_size + 1, ATMEL_POOL_TAG);
+
+	/* Read T44 and T5 together */
+	stret = mxt_read_reg(pDevice, pDevice->T44_address, msg_buf, pDevice->T5_msg_size);
+
+	count = msg_buf[0];
+
+	if (count == 0)
+		goto end;
+
+	if (count > pDevice->max_reportid) {
+		count = pDevice->max_reportid;
+	}
+
+	ret = AtmelProcessMessage(pDevice, msg_buf + 1);
+	if (ret < 0) {
+		goto end;
+	}
+
+	num_left = count - 1;
+
+	if (num_left) {
+		ret = AtmelReadAndProcessMessages(pDevice, num_left);
+		if (ret < 0)
+			goto end;
+		//else if (ret != num_left)
+		///	DbgPrint("T44: Unexpected invalid message!\n");
+	}
+
+end:
+	ExFreePoolWithTag(msg_buf, ATMEL_POOL_TAG);
+	return true;
+}
+
+bool AtmelDeviceRead(PATMEL_CONTEXT pDevice) {
+	int total_handled, num_handled;
+	uint8_t count = pDevice->last_message_count;
+
+	if (count < 1 || count > pDevice->max_reportid)
+		count = 1;
+
+	/* include final invalid message */
+	total_handled = AtmelReadAndProcessMessages(pDevice, count + 1);
+	if (total_handled < 0)
+		return false;
+	else if (total_handled <= count)
+		goto update_count;
+
+	/* keep reading two msgs until one is invalid or reportid limit */
+	do {
+		num_handled = AtmelReadAndProcessMessages(pDevice, 2);
+		if (num_handled < 0)
+			return false;
+
+		total_handled += num_handled;
+
+		if (num_handled < 2)
+			break;
+	} while (total_handled < pDevice->num_touchids);
+
+update_count:
+	pDevice->last_message_count = total_handled;
 
 	return true;
 }
@@ -675,54 +833,33 @@ void AtmelProcessInput(PATMEL_CONTEXT pDevice) {
 		AtmelProcessVendorReport(pDevice, &report, sizeof(report), &bytesWritten);
 	}
 }
+BOOLEAN OnInterruptIsr(
+	WDFINTERRUPT Interrupt,
+	ULONG MessageID) {
+	UNREFERENCED_PARAMETER(MessageID);
 
-VOID
-AtmelReadWriteWorkItem(
-	IN WDFWORKITEM  WorkItem
-	)
-{
-	WDFDEVICE Device = (WDFDEVICE)WdfWorkItemGetParentObject(WorkItem);
+	WDFDEVICE Device = WdfInterruptGetDevice(Interrupt);
 	PATMEL_CONTEXT pDevice = GetDeviceContext(Device);
 
-	WdfObjectDelete(WorkItem);
-
 	if (!pDevice->ConnectInterrupt)
-		return;
+		return true;
 
-	if (pDevice->multitouch != MXT_TOUCH_MULTITOUCHSCREEN_T100) {
-		return;
-	}
-
-	AtmelDeviceRead(pDevice);
+	if (pDevice->T44_address)
+		AtmelDeviceReadT44(pDevice);
+	else
+		AtmelDeviceRead(pDevice);
 
 	AtmelProcessInput(pDevice);
+
+	return true;
 }
 
-void AtmelTimerFunc(_In_ WDFTIMER hTimer){
+void AtmelTimerFunc(_In_ WDFTIMER hTimer) {
 	WDFDEVICE Device = (WDFDEVICE)WdfTimerGetParentObject(hTimer);
 	PATMEL_CONTEXT pDevice = GetDeviceContext(Device);
 
 	if (!pDevice->ConnectInterrupt)
 		return;
-
-	if (pDevice->multitouch == MXT_TOUCH_MULTITOUCHSCREEN_T100) {
-		WDF_OBJECT_ATTRIBUTES attributes;
-		WDF_WORKITEM_CONFIG workitemConfig;
-		WDFWORKITEM hWorkItem;
-
-		WDF_OBJECT_ATTRIBUTES_INIT(&attributes);
-		WDF_OBJECT_ATTRIBUTES_SET_CONTEXT_TYPE(&attributes, ATMEL_CONTEXT);
-		attributes.ParentObject = Device;
-		WDF_WORKITEM_CONFIG_INIT(&workitemConfig, AtmelReadWriteWorkItem);
-
-		WdfWorkItemCreate(&workitemConfig,
-			&attributes,
-			&hWorkItem);
-
-		WdfWorkItemEnqueue(hWorkItem);
-
-		return;
-	}
 
 	if (!pDevice->RegsSet)
 		return;
@@ -733,8 +870,8 @@ void AtmelTimerFunc(_In_ WDFTIMER hTimer){
 
 NTSTATUS
 AtmelEvtDeviceAdd(
-IN WDFDRIVER       Driver,
-IN PWDFDEVICE_INIT DeviceInit
+	IN WDFDRIVER       Driver,
+	IN PWDFDEVICE_INIT DeviceInit
 )
 {
 	NTSTATUS                      status = STATUS_SUCCESS;
@@ -786,7 +923,7 @@ IN PWDFDEVICE_INIT DeviceInit
 		IRP_MJ_PNP,
 		&minorFunction,
 		1
-		);
+	);
 	if (!NT_SUCCESS(status))
 	{
 		AtmelPrint(DEBUG_LEVEL_ERROR, DBG_PNP,
@@ -825,7 +962,7 @@ IN PWDFDEVICE_INIT DeviceInit
 		&queueConfig,
 		WDF_NO_OBJECT_ATTRIBUTES,
 		&queue
-		);
+	);
 
 	if (!NT_SUCCESS(status))
 	{
@@ -841,6 +978,8 @@ IN PWDFDEVICE_INIT DeviceInit
 
 	devContext = GetDeviceContext(device);
 
+	devContext->FxDevice = device;
+
 	WDF_IO_QUEUE_CONFIG_INIT(&queueConfig, WdfIoQueueDispatchManual);
 
 	queueConfig.PowerManaged = WdfFalse;
@@ -849,7 +988,7 @@ IN PWDFDEVICE_INIT DeviceInit
 		&queueConfig,
 		WDF_NO_OBJECT_ATTRIBUTES,
 		&devContext->ReportQueue
-		);
+	);
 
 	if (!NT_SUCCESS(status))
 	{
@@ -909,8 +1048,8 @@ IN PWDFDEVICE_INIT DeviceInit
 
 NTSTATUS
 AtmelEvtWdmPreprocessMnQueryId(
-WDFDEVICE Device,
-PIRP Irp
+	WDFDEVICE Device,
+	PIRP Irp
 )
 {
 	NTSTATUS            status;
@@ -965,7 +1104,7 @@ PIRP Irp
 				NonPagedPool,
 				ATMEL_HARDWARE_IDS_LENGTH,
 				ATMEL_POOL_TAG
-				);
+			);
 
 			if (buffer)
 			{
@@ -975,7 +1114,7 @@ PIRP Irp
 				RtlCopyMemory(buffer,
 					ATMEL_HARDWARE_IDS,
 					ATMEL_HARDWARE_IDS_LENGTH
-					);
+				);
 
 				Irp->IoStatus.Information = (ULONG_PTR)buffer;
 				status = STATUS_SUCCESS;
@@ -1013,11 +1152,11 @@ PIRP Irp
 
 VOID
 AtmelEvtInternalDeviceControl(
-IN WDFQUEUE     Queue,
-IN WDFREQUEST   Request,
-IN size_t       OutputBufferLength,
-IN size_t       InputBufferLength,
-IN ULONG        IoControlCode
+	IN WDFQUEUE     Queue,
+	IN WDFREQUEST   Request,
+	IN size_t       OutputBufferLength,
+	IN size_t       InputBufferLength,
+	IN ULONG        IoControlCode
 )
 {
 	NTSTATUS            status = STATUS_SUCCESS;
@@ -1036,7 +1175,7 @@ IN ULONG        IoControlCode
 		DbgHidInternalIoctlString(IoControlCode),
 		Queue,
 		Request
-		);
+	);
 
 	//
 	// Please note that HIDCLASS provides the buffer in the Irp->UserBuffer
@@ -1142,7 +1281,7 @@ IN ULONG        IoControlCode
 			DbgHidInternalIoctlString(IoControlCode),
 			Queue,
 			Request
-			);
+		);
 	}
 	else
 	{
@@ -1151,7 +1290,7 @@ IN ULONG        IoControlCode
 			DbgHidInternalIoctlString(IoControlCode),
 			Queue,
 			Request
-			);
+		);
 	}
 
 	return;
@@ -1159,8 +1298,8 @@ IN ULONG        IoControlCode
 
 NTSTATUS
 AtmelGetHidDescriptor(
-IN WDFDEVICE Device,
-IN WDFREQUEST Request
+	IN WDFDEVICE Device,
+	IN WDFREQUEST Request
 )
 {
 	NTSTATUS            status = STATUS_SUCCESS;
@@ -1232,8 +1371,8 @@ IN WDFREQUEST Request
 
 NTSTATUS
 AtmelGetReportDescriptor(
-IN WDFDEVICE Device,
-IN WDFREQUEST Request
+	IN WDFDEVICE Device,
+	IN WDFREQUEST Request
 )
 {
 	NTSTATUS            status = STATUS_SUCCESS;
@@ -1247,7 +1386,7 @@ IN WDFREQUEST Request
 	AtmelPrint(DEBUG_LEVEL_VERBOSE, DBG_IOCTL,
 		"AtmelGetReportDescriptor Entry\n");
 
-	#define MT_TOUCH_COLLECTION												\
+#define MT_TOUCH_COLLECTION												\
 			MT_TOUCH_COLLECTION0 \
 			0x26, devContext->max_x_hid[0], devContext->max_x_hid[1],                   /*       LOGICAL_MAXIMUM (WIDTH)    */ \
 			MT_TOUCH_COLLECTION1 \
@@ -1336,7 +1475,7 @@ IN WDFREQUEST Request
 
 NTSTATUS
 AtmelGetDeviceAttributes(
-IN WDFREQUEST Request
+	IN WDFREQUEST Request
 )
 {
 	NTSTATUS                 status = STATUS_SUCCESS;
@@ -1388,7 +1527,7 @@ IN WDFREQUEST Request
 
 NTSTATUS
 AtmelGetString(
-IN WDFREQUEST Request
+	IN WDFREQUEST Request
 )
 {
 
@@ -1423,7 +1562,7 @@ IN WDFREQUEST Request
 		break;
 	}
 
-	lenID = pwstrID ? wcslen(pwstrID)*sizeof(WCHAR) + sizeof(UNICODE_NULL) : 0;
+	lenID = pwstrID ? wcslen(pwstrID) * sizeof(WCHAR) + sizeof(UNICODE_NULL) : 0;
 
 	if (pwstrID == NULL)
 	{
@@ -1462,8 +1601,8 @@ IN WDFREQUEST Request
 
 NTSTATUS
 AtmelWriteReport(
-IN PATMEL_CONTEXT DevContext,
-IN WDFREQUEST Request
+	IN PATMEL_CONTEXT DevContext,
+	IN WDFREQUEST Request
 )
 {
 	NTSTATUS status = STATUS_SUCCESS;
@@ -1525,10 +1664,10 @@ IN WDFREQUEST Request
 
 NTSTATUS
 AtmelProcessVendorReport(
-IN PATMEL_CONTEXT DevContext,
-IN PVOID ReportBuffer,
-IN ULONG ReportBufferLen,
-OUT size_t* BytesWritten
+	IN PATMEL_CONTEXT DevContext,
+	IN PVOID ReportBuffer,
+	IN ULONG ReportBufferLen,
+	OUT size_t* BytesWritten
 )
 {
 	NTSTATUS status = STATUS_SUCCESS;
@@ -1607,9 +1746,9 @@ OUT size_t* BytesWritten
 
 NTSTATUS
 AtmelReadReport(
-IN PATMEL_CONTEXT DevContext,
-IN WDFREQUEST Request,
-OUT BOOLEAN* CompleteRequest
+	IN PATMEL_CONTEXT DevContext,
+	IN WDFREQUEST Request,
+	OUT BOOLEAN* CompleteRequest
 )
 {
 	NTSTATUS status = STATUS_SUCCESS;
@@ -1644,9 +1783,9 @@ OUT BOOLEAN* CompleteRequest
 
 NTSTATUS
 AtmelSetFeature(
-IN PATMEL_CONTEXT DevContext,
-IN WDFREQUEST Request,
-OUT BOOLEAN* CompleteRequest
+	IN PATMEL_CONTEXT DevContext,
+	IN WDFREQUEST Request,
+	OUT BOOLEAN* CompleteRequest
 )
 {
 	NTSTATUS status = STATUS_SUCCESS;
@@ -1730,9 +1869,9 @@ OUT BOOLEAN* CompleteRequest
 
 NTSTATUS
 AtmelGetFeature(
-IN PATMEL_CONTEXT DevContext,
-IN WDFREQUEST Request,
-OUT BOOLEAN* CompleteRequest
+	IN PATMEL_CONTEXT DevContext,
+	IN WDFREQUEST Request,
+	OUT BOOLEAN* CompleteRequest
 )
 {
 	NTSTATUS status = STATUS_SUCCESS;
@@ -1848,7 +1987,7 @@ OUT BOOLEAN* CompleteRequest
 
 PCHAR
 DbgHidInternalIoctlString(
-IN ULONG IoControlCode
+	IN ULONG IoControlCode
 )
 {
 	switch (IoControlCode)

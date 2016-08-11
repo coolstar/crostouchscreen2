@@ -79,7 +79,7 @@
 *
 * { mxt_id_info, mxt_object[num_objects], mxt_raw_crc }
 */
-__packed(struct mxt_raw_crc{
+__packed(struct mxt_raw_crc {
 	uint16_t CRC;		/* low 16 bits */
 	uint8_t CRC_hi;		/* high 8 bits */
 });
@@ -87,7 +87,7 @@ __packed(struct mxt_raw_crc{
 /*
 * register 0 - Base information structure
 */
-__packed(struct mxt_id_info{
+__packed(struct mxt_id_info {
 	uint8_t family;		/*!< Device family */
 	uint8_t variant;	/*!< Device variant */
 
@@ -97,10 +97,10 @@ __packed(struct mxt_id_info{
 	uint8_t matrix_x_size;	/*!< Matrix X Size */
 	uint8_t matrix_y_size;	/*!< Matrix Y Size */
 
-	/*! Number of elements in the object table. The actual number of
-	*  objects can be different if any object has more than one
-	*  instance.
-	*/
+							/*! Number of elements in the object table. The actual number of
+							*  objects can be different if any object has more than one
+							*  instance.
+							*/
 	uint8_t num_objects;
 });
 
@@ -134,14 +134,16 @@ __packed(struct mxt_id_info{
 #define MXT_SPT_CTECONFIG_T46		46
 #define MXT_TOUCH_MULTITOUCHSCREEN_T100 100
 
+#define MXT_OBJECT_START	0x07
+
 /*
 * register 0 - Object configuration element(s) (occurs after mxt_id_info)
 */
 __packed(struct mxt_object {
 	uint8_t type;			/* object type */
 	uint16_t start_address;		/* start address of config structure */
-	//uint8_t start_pos_lsb;		/* start address of config structure */
-	//uint8_t start_pos_msb;		/* start address of config structure */
+								//uint8_t start_pos_lsb;		/* start address of config structure */
+								//uint8_t start_pos_msb;		/* start address of config structure */
 	uint8_t size_minus_one;		/* size of config - 1 */
 	uint8_t instances_minus_one;	/* #of instances of object - 1 */
 	uint8_t num_report_ids;		/* max# of touches, sliders, buts, etc*/
@@ -150,7 +152,7 @@ __packed(struct mxt_object {
 /*
 * message structures (MXT_GEN_MESSAGEPROCESSOR)
 */
-__packed(struct mxt_message_any{
+__packed(struct mxt_message_any {
 	uint8_t	reportid;
 	uint8_t	data[7];
 });
@@ -164,7 +166,7 @@ __packed(struct t7_config {
 #define MXT_POWER_CFG_RUN		0
 #define MXT_POWER_CFG_DEEPSLEEP		1
 
-__packed(struct mxt_message_touch_t9{
+__packed(struct mxt_message_touch_t9 {
 	uint8_t reportid;
 	uint8_t flags;		/* msg[0] */
 	uint8_t pos[3];		/* xxxxxxxx(hi) yyyyyyyy(hi) xxxxyyyy(lo) */
@@ -572,6 +574,14 @@ __packed(union mxt_message {
 	{ MXTSTR(MXT_RESERVED255),		\
 	   MXT_RESERVED255		}
 
+/* Define for T6 status byte */
+#define MXT_T6_STATUS_RESET	(1 << 7)
+#define MXT_T6_STATUS_OFL	(1 << 6)
+#define MXT_T6_STATUS_SIGERR	(1 << 5)
+#define MXT_T6_STATUS_CAL	(1 << 4)
+#define MXT_T6_STATUS_CFGERR	(1 << 3)
+#define MXT_T6_STATUS_COMSERR	(1 << 2)
+
 /*
 * MXT_GEN_COMMANDPROCESSOR object offsets.
 */
@@ -581,6 +591,11 @@ __packed(union mxt_message {
 #define MXT_CMDPROC_REPORTALL_OFF	0x03
 #define MXT_CMDPROC_RESERVED04_OFF	0x04
 #define MXT_CMDPROC_DIAGNOSTIC_OFF	0x05
+
+/* Define for MXT_GEN_COMMAND_T6 */
+#define MXT_BOOT_VALUE		0xa5
+#define MXT_RESET_VALUE		0x01
+#define MXT_BACKUP_VALUE	0x55
 
 /*
 * device driver helper structures
