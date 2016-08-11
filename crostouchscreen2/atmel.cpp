@@ -6,7 +6,6 @@ static ULONG AtmelDebugCatagories = DBG_INIT || DBG_PNP || DBG_IOCTL;
 
 
 int AtmelProcessMessagesUntilInvalid(PATMEL_CONTEXT pDevice);
-VOID AtmelReadWriteWorkItem(IN WDFWORKITEM  WorkItem);
 
 NTSTATUS
 DriverEntry(
@@ -360,8 +359,6 @@ NTSTATUS BOOTTOUCHSCREEN(
 	}
 
 	atmel_reset_device(devContext);
-
-	devContext->ConnectInterrupt = false;
 
 	WDF_TIMER_CONFIG              timerConfig;
 	WDFTIMER                      hTimer;
