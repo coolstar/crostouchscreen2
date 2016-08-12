@@ -43,9 +43,7 @@
     0x81, 0x02,                         /*       INPUT (Data,Var,Abs)       */ \
     0x09, 0x32,                         /*       USAGE (In Range)           */ \
     0x81, 0x02,                         /*       INPUT (Data,Var,Abs)       */ \
-    0x09, 0x47,                         /*       USAGE (Confidence)         */ \
-    0x81, 0x02,                         /*       INPUT (Data,Var,Abs)       */ \
-    0x95, 0x05,                         /*       REPORT_COUNT (5)           */ \
+    0x95, 0x06,                         /*       REPORT_COUNT (6)           */ \
     0x81, 0x03,                         /*       INPUT (Cnst,Ary,Abs)       */ \
     0x75, 0x08,                         /*       REPORT_SIZE (8)            */ \
     0x09, 0x51,                         /*       USAGE (Contact Identifier) */ \

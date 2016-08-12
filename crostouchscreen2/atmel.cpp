@@ -652,17 +652,17 @@ int AtmelProcessMessage(PATMEL_CONTEXT pDevice, uint8_t *message) {
 
 			uint8_t flags = pDevice->Flags[i];
 			if (flags & MXT_T9_DETECT) {
-				report.Touch[count].Status = MULTI_IN_RANGE_BIT | MULTI_CONFIDENCE_BIT | MULTI_TIPSWITCH_BIT;
+				report.Touch[count].Status = MULTI_IN_RANGE_BIT | MULTI_TIPSWITCH_BIT;
 			}
 			else if (flags & MXT_T9_PRESS) {
-				report.Touch[count].Status = MULTI_IN_RANGE_BIT | MULTI_CONFIDENCE_BIT | MULTI_TIPSWITCH_BIT;
+				report.Touch[count].Status = MULTI_IN_RANGE_BIT | MULTI_TIPSWITCH_BIT;
 			}
 			else if (flags & MXT_T9_RELEASE) {
 				report.Touch[count].Status = 0;
 				pDevice->Flags[i] = 0;
 			}
 			else
-				report.Touch[count].Status = MULTI_IN_RANGE_BIT;
+				report.Touch[count].Status = 0;
 
 			count++;
 		}
@@ -806,17 +806,17 @@ void AtmelProcessInput(PATMEL_CONTEXT pDevice) {
 
 			uint8_t flags = pDevice->Flags[i];
 			if (flags & MXT_T9_DETECT) {
-				report.Touch[count].Status = MULTI_IN_RANGE_BIT | MULTI_CONFIDENCE_BIT | MULTI_TIPSWITCH_BIT;
+				report.Touch[count].Status = MULTI_IN_RANGE_BIT | MULTI_TIPSWITCH_BIT;
 			}
 			else if (flags & MXT_T9_PRESS) {
-				report.Touch[count].Status = MULTI_IN_RANGE_BIT | MULTI_CONFIDENCE_BIT | MULTI_TIPSWITCH_BIT;
+				report.Touch[count].Status = MULTI_IN_RANGE_BIT | MULTI_TIPSWITCH_BIT;
 			}
 			else if (flags & MXT_T9_RELEASE) {
 				report.Touch[count].Status = 0;
 				pDevice->Flags[i] = 0;
 			}
 			else
-				report.Touch[count].Status = MULTI_IN_RANGE_BIT;
+				report.Touch[count].Status = 0;
 
 			count++;
 		}
