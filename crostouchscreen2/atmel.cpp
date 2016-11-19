@@ -541,6 +541,8 @@ Status
 
 	WdfTimerStart(pDevice->Timer, WDF_REL_TIMEOUT_IN_MS(10));
 
+	atmel_reset_device(pDevice);
+
 	for (int i = 0; i < 20; i++) {
 		pDevice->Flags[i] = 0;
 	}
