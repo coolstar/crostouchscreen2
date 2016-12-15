@@ -188,6 +188,25 @@ static NTSTATUS mxt_read_t100_config(PATMEL_CONTEXT devContext)
 	return STATUS_SUCCESS;
 }
 
+static NTSTATUS mxt_set_t7_power_cfg(PATMEL_CONTEXT  devContext, uint8_t sleep)
+{
+	struct t7_config *new_config;
+	struct t7_config deepsleep;
+	deepsleep.active = deepsleep.idle = 0;
+	struct t7_config active;
+	active.active = 20;
+	active.idle = 100;
+
+	if (sleep == MXT_POWER_CFG_DEEPSLEEP)
+		new_config = &deepsleep;
+	else {
+		new_config = &active;
+	}
+
+	return mxt_write_reg_buf(devContext, devContext->T7_address,
+		new_config, sizeof(devContext->t7_cfg));
+}
+
 VOID
 AtmelBootWorkItem(
 	IN WDFWORKITEM  WorkItem
@@ -227,152 +246,167 @@ NTSTATUS BOOTTOUCHSCREEN(
 	_In_  PATMEL_CONTEXT  devContext
 )
 {
-	int blksize;
-	int totsize;
-	uint32_t crc;
-	mxt_rollup core = devContext->core;
+	if (!devContext->TouchScreenBooted) {
+		int blksize;
+		int totsize;
+		uint32_t crc;
+		mxt_rollup core = devContext->core;
 
-	AtmelPrint(DEBUG_LEVEL_INFO, DBG_PNP, "Initializing Touch Screen.\n");
+		AtmelPrint(DEBUG_LEVEL_INFO, DBG_PNP, "Initializing Touch Screen.\n");
 
-	mxt_read_reg(devContext, 0, &core.info, sizeof(core.info));
+		mxt_read_reg(devContext, 0, &core.info, sizeof(core.info));
 
-	core.nobjs = core.info.num_objects;
+		core.nobjs = core.info.num_objects;
 
-	if (core.nobjs < 0 || core.nobjs > 1024) {
-		AtmelPrint(DEBUG_LEVEL_ERROR, DBG_PNP, "init_device nobjs (%d) out of bounds\n",
-			core.nobjs);
-	}
+		if (core.nobjs < 0 || core.nobjs > 1024) {
+			AtmelPrint(DEBUG_LEVEL_ERROR, DBG_PNP, "init_device nobjs (%d) out of bounds\n",
+				core.nobjs);
+		}
 
-	blksize = sizeof(core.info) +
-		core.nobjs * sizeof(struct mxt_object);
-	totsize = blksize + sizeof(struct mxt_raw_crc);
+		blksize = sizeof(core.info) +
+			core.nobjs * sizeof(struct mxt_object);
+		totsize = blksize + sizeof(struct mxt_raw_crc);
 
-	core.buf = (uint8_t *)ExAllocatePoolWithTag(NonPagedPool, totsize, ATMEL_POOL_TAG);
+		core.buf = (uint8_t *)ExAllocatePoolWithTag(NonPagedPool, totsize, ATMEL_POOL_TAG);
 
-	mxt_read_reg(devContext, 0, core.buf, totsize);
+		mxt_read_reg(devContext, 0, core.buf, totsize);
 
-	crc = obp_convert_crc((mxt_raw_crc *)((uint8_t *)core.buf + blksize));
+		crc = obp_convert_crc((mxt_raw_crc *)((uint8_t *)core.buf + blksize));
 
-	if (obp_crc24(core.buf, blksize) != crc) {
-		AtmelPrint(DEBUG_LEVEL_ERROR, DBG_PNP,
-			"init_device: configuration space "
-			"crc mismatch %08x/%08x\n",
-			crc, obp_crc24(core.buf, blksize));
-	}
-	else {
-		AtmelPrint(DEBUG_LEVEL_ERROR, DBG_PNP, "CRC Matched!\n");
-	}
-
-	core.objs = (mxt_object *)((uint8_t *)core.buf +
-		sizeof(core.info));
-
-	devContext->msgprocobj = mxt_findobject(&core, MXT_GEN_MESSAGEPROCESSOR);
-	devContext->cmdprocobj = mxt_findobject(&core, MXT_GEN_COMMANDPROCESSOR);
-
-	devContext->core = core;
-
-	int reportid = 1;
-	for (int i = 0; i < core.nobjs; i++) {
-		mxt_object *obj = &core.objs[i];
-		uint8_t min_id, max_id;
-
-		if (obj->num_report_ids) {
-			min_id = reportid;
-			reportid += obj->num_report_ids *
-				mxt_obj_instances(obj);
-			max_id = reportid - 1;
+		if (obp_crc24(core.buf, blksize) != crc) {
+			AtmelPrint(DEBUG_LEVEL_ERROR, DBG_PNP,
+				"init_device: configuration space "
+				"crc mismatch %08x/%08x\n",
+				crc, obp_crc24(core.buf, blksize));
 		}
 		else {
-			min_id = 0;
-			max_id = 0;
+			AtmelPrint(DEBUG_LEVEL_ERROR, DBG_PNP, "CRC Matched!\n");
 		}
 
-		switch (obj->type) {
-		case MXT_GEN_MESSAGE_T5:
-			if (devContext->info.family == 0x80 &&
-				devContext->info.version < 0x20) {
-				/*
-				* On mXT224 firmware versions prior to V2.0
-				* read and discard unused CRC byte otherwise
-				* DMA reads are misaligned.
-				*/
-				devContext->T5_msg_size = mxt_obj_size(obj);
+		core.objs = (mxt_object *)((uint8_t *)core.buf +
+			sizeof(core.info));
+
+		devContext->msgprocobj = mxt_findobject(&core, MXT_GEN_MESSAGEPROCESSOR);
+		devContext->cmdprocobj = mxt_findobject(&core, MXT_GEN_COMMANDPROCESSOR);
+
+		devContext->core = core;
+
+		int reportid = 1;
+		for (int i = 0; i < core.nobjs; i++) {
+			mxt_object *obj = &core.objs[i];
+			uint8_t min_id, max_id;
+
+			if (obj->num_report_ids) {
+				min_id = reportid;
+				reportid += obj->num_report_ids *
+					mxt_obj_instances(obj);
+				max_id = reportid - 1;
 			}
 			else {
-				/* CRC not enabled, so skip last byte */
-				devContext->T5_msg_size = mxt_obj_size(obj) - 1;
+				min_id = 0;
+				max_id = 0;
 			}
-			devContext->T5_address = obj->start_address;
-			break;
-		case MXT_GEN_COMMAND_T6:
-			devContext->T6_reportid = min_id;
-			devContext->T6_address = obj->start_address;
-			break;
-		case MXT_GEN_POWER_T7:
-			devContext->T7_address = obj->start_address;
-			break;
-		case MXT_TOUCH_MULTI_T9:
-			devContext->multitouch = MXT_TOUCH_MULTI_T9;
-			devContext->T9_reportid_min = min_id;
-			devContext->T9_reportid_max = max_id;
-			devContext->num_touchids = obj->num_report_ids
-				* mxt_obj_instances(obj);
-			break;
-		case MXT_SPT_MESSAGECOUNT_T44:
-			devContext->T44_address = obj->start_address;
-			break;
-		case MXT_SPT_GPIOPWM_T19:
-			devContext->T19_reportid = min_id;
-			break;
-		case MXT_TOUCH_MULTITOUCHSCREEN_T100:
-			devContext->multitouch = MXT_TOUCH_MULTITOUCHSCREEN_T100;
-			devContext->T100_reportid_min = min_id;
-			devContext->T100_reportid_max = max_id;
 
-			/* first two report IDs reserved */
-			devContext->num_touchids = obj->num_report_ids - 2;
-			break;
+			switch (obj->type) {
+			case MXT_GEN_MESSAGE_T5:
+				if (devContext->info.family == 0x80 &&
+					devContext->info.version < 0x20) {
+					/*
+					* On mXT224 firmware versions prior to V2.0
+					* read and discard unused CRC byte otherwise
+					* DMA reads are misaligned.
+					*/
+					devContext->T5_msg_size = mxt_obj_size(obj);
+				}
+				else {
+					/* CRC not enabled, so skip last byte */
+					devContext->T5_msg_size = mxt_obj_size(obj) - 1;
+				}
+				devContext->T5_address = obj->start_address;
+				break;
+			case MXT_GEN_COMMAND_T6:
+				devContext->T6_reportid = min_id;
+				devContext->T6_address = obj->start_address;
+				break;
+			case MXT_GEN_POWER_T7:
+				devContext->T7_address = obj->start_address;
+				break;
+			case MXT_TOUCH_MULTI_T9:
+				devContext->multitouch = MXT_TOUCH_MULTI_T9;
+				devContext->T9_reportid_min = min_id;
+				devContext->T9_reportid_max = max_id;
+				devContext->num_touchids = obj->num_report_ids
+					* mxt_obj_instances(obj);
+				break;
+			case MXT_SPT_MESSAGECOUNT_T44:
+				devContext->T44_address = obj->start_address;
+				break;
+			case MXT_SPT_GPIOPWM_T19:
+				devContext->T19_reportid = min_id;
+				break;
+			case MXT_TOUCH_MULTITOUCHSCREEN_T100:
+				devContext->multitouch = MXT_TOUCH_MULTITOUCHSCREEN_T100;
+				devContext->T100_reportid_min = min_id;
+				devContext->T100_reportid_max = max_id;
+
+				/* first two report IDs reserved */
+				devContext->num_touchids = obj->num_report_ids - 2;
+				break;
+			}
 		}
+
+		devContext->max_reportid = reportid;
+
+		AtmelProcessMessagesUntilInvalid(devContext);
+
+		if (devContext->multitouch == MXT_TOUCH_MULTI_T9)
+			mxt_read_t9_resolution(devContext);
+		else if (devContext->multitouch == MXT_TOUCH_MULTITOUCHSCREEN_T100)
+			mxt_read_t100_config(devContext);
+
+		if (devContext->multitouch == MXT_TOUCH_MULTI_T9 || devContext->multitouch == MXT_TOUCH_MULTITOUCHSCREEN_T100) {
+			uint16_t max_x[] = { devContext->max_x };
+			uint16_t max_y[] = { devContext->max_y };
+
+			uint8_t *max_x8bit = (uint8_t *)max_x;
+			uint8_t *max_y8bit = (uint8_t *)max_y;
+
+			devContext->max_x_hid[0] = max_x8bit[0];
+			devContext->max_x_hid[1] = max_x8bit[1];
+
+			devContext->max_y_hid[0] = max_y8bit[0];
+			devContext->max_y_hid[1] = max_y8bit[1];
+		}
+
+		atmel_reset_device(devContext);
+
+		WDF_TIMER_CONFIG              timerConfig;
+		WDFTIMER                      hTimer;
+		WDF_OBJECT_ATTRIBUTES         attributes;
+
+		WDF_TIMER_CONFIG_INIT(&timerConfig, AtmelBootTimer);
+
+		WDF_OBJECT_ATTRIBUTES_INIT(&attributes);
+		attributes.ParentObject = devContext->FxDevice;
+		NTSTATUS status = WdfTimerCreate(&timerConfig, &attributes, &hTimer);
+
+		WdfTimerStart(hTimer, WDF_REL_TIMEOUT_IN_MS(200));
+
+		devContext->TouchScreenBooted = true;
+
+		return status;
 	}
+	else {
+		if (devContext->multitouch == MXT_TOUCH_MULTITOUCHSCREEN_T100)
+			mxt_set_t7_power_cfg(devContext, MXT_POWER_CFG_RUN);
+		else {
+			struct mxt_object *obj = mxt_findobject(&devContext->core, MXT_TOUCH_MULTI_T9);
+			mxt_write_object_off(devContext, obj, MXT_T9_CTRL, 0x83);
+		}
 
-	devContext->max_reportid = reportid;
-
-	AtmelProcessMessagesUntilInvalid(devContext);
-
-	if (devContext->multitouch == MXT_TOUCH_MULTI_T9)
-		mxt_read_t9_resolution(devContext);
-	else if (devContext->multitouch == MXT_TOUCH_MULTITOUCHSCREEN_T100)
-		mxt_read_t100_config(devContext);
-
-	if (devContext->multitouch == MXT_TOUCH_MULTI_T9 || devContext->multitouch == MXT_TOUCH_MULTITOUCHSCREEN_T100) {
-		uint16_t max_x[] = { devContext->max_x };
-		uint16_t max_y[] = { devContext->max_y };
-
-		uint8_t *max_x8bit = (uint8_t *)max_x;
-		uint8_t *max_y8bit = (uint8_t *)max_y;
-
-		devContext->max_x_hid[0] = max_x8bit[0];
-		devContext->max_x_hid[1] = max_x8bit[1];
-
-		devContext->max_y_hid[0] = max_y8bit[0];
-		devContext->max_y_hid[1] = max_y8bit[1];
+		atmel_reset_device(devContext);
+		return STATUS_SUCCESS;
 	}
-
-	atmel_reset_device(devContext);
-
-	WDF_TIMER_CONFIG              timerConfig;
-	WDFTIMER                      hTimer;
-	WDF_OBJECT_ATTRIBUTES         attributes;
-
-	WDF_TIMER_CONFIG_INIT(&timerConfig, AtmelBootTimer);
-
-	WDF_OBJECT_ATTRIBUTES_INIT(&attributes);
-	attributes.ParentObject = devContext->FxDevice;
-	NTSTATUS status = WdfTimerCreate(&timerConfig, &attributes, &hTimer);
-
-	WdfTimerStart(hTimer, WDF_REL_TIMEOUT_IN_MS(200));
-
-	return status;
 }
 
 NTSTATUS
@@ -578,6 +612,13 @@ Status
 	UNREFERENCED_PARAMETER(FxPreviousState);
 
 	PATMEL_CONTEXT pDevice = GetDeviceContext(FxDevice);
+
+	if (pDevice->multitouch == MXT_TOUCH_MULTITOUCHSCREEN_T100)
+		mxt_set_t7_power_cfg(pDevice, MXT_POWER_CFG_DEEPSLEEP);
+	else {
+		struct mxt_object *obj = mxt_findobject(&pDevice->core, MXT_TOUCH_MULTI_T9);
+		mxt_write_object_off(pDevice, obj, MXT_T9_CTRL, 0);
+	}
 
 	WdfTimerStop(pDevice->Timer, TRUE);
 
@@ -976,6 +1017,8 @@ AtmelEvtDeviceAdd(
 	//
 
 	devContext = GetDeviceContext(device);
+
+	devContext->TouchScreenBooted = false;
 
 	devContext->FxDevice = device;
 

@@ -165,6 +165,8 @@ typedef struct _ATMEL_CONTEXT
 
 	BOOLEAN ConnectInterrupt;
 
+	BOOLEAN TouchScreenBooted;
+
 	BOOLEAN RegsSet;
 
 	WDFTIMER Timer;
