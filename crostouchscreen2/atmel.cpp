@@ -613,15 +613,15 @@ Status
 
 	PATMEL_CONTEXT pDevice = GetDeviceContext(FxDevice);
 	
-	if (FxTargetState != 5) {
 
 	if (pDevice->multitouch == MXT_TOUCH_MULTITOUCHSCREEN_T100)
 		mxt_set_t7_power_cfg(pDevice, MXT_POWER_CFG_DEEPSLEEP);
 	else {
+		if (FxTargetState != 5) {
 		struct mxt_object *obj = mxt_findobject(&pDevice->core, MXT_TOUCH_MULTI_T9);
 		mxt_write_object_off(pDevice, obj, MXT_T9_CTRL, 0);
-	}
-	
+		
+		}
 	}
 
 	WdfTimerStop(pDevice->Timer, TRUE);
