@@ -16,16 +16,14 @@ Signature   = "$WINDOWS NT$"
 Class       = HIDClass
 ClassGuid   = {745a17a0-74d3-11d0-b6fe-00a0c90f57da}
 Provider    = CoolStar
-DriverVer   = 09/22/2015,2.1
+DriverVer   = 11/10/2021,2.9.1
 CatalogFile = crostouchscreen2.cat
+PnpLockdown=1
 
 [DestinationDirs]
 DefaultDestDir = 12
 
 ; ================= Class section =====================
-
-[ClassInstall32]
-AddReg=CrosTouchScreen_RegistryAdd
 
 [SourceDisksNames]
 1 = %DiskId1%,,,""

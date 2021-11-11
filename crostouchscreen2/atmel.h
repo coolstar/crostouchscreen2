@@ -27,8 +27,6 @@
 #define DRIVERNAME                 "crostouchscreen2.sys: "
 
 #define ATMEL_POOL_TAG            (ULONG) 'lmtA'
-#define ATMEL_HARDWARE_IDS        L"CoolStar\\ATML0001\0\0"
-#define ATMEL_HARDWARE_IDS_LENGTH sizeof(ATMEL_HARDWARE_IDS)
 
 #define NTDEVICE_NAME_STRING       L"\\Device\\ATML0001"
 #define SYMBOLIC_NAME_STRING       L"\\DosDevices\\ATML0001"
