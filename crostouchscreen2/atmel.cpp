@@ -109,23 +109,30 @@ mxt_write_object_off(PATMEL_CONTEXT  devContext, struct mxt_object *obj,
 }
 
 static
-void
+NTSTATUS
 atmel_reset_device(PATMEL_CONTEXT  devContext)
 {
-	mxt_write_object_off(devContext, devContext->cmdprocobj, MXT_CMDPROC_RESET_OFF, 1);
+	return mxt_write_object_off(devContext, devContext->cmdprocobj, MXT_CMDPROC_RESET_OFF, 1);
 }
 
 static NTSTATUS mxt_read_t9_resolution(PATMEL_CONTEXT devContext)
 {
 	struct t9_range range;
 	unsigned char orient;
+	NTSTATUS status;
 
 	mxt_rollup core = devContext->core;
 	mxt_object *resolutionobject = mxt_findobject(&core, MXT_TOUCH_MULTI_T9);
 
-	mxt_read_reg(devContext, resolutionobject->start_address + MXT_T9_RANGE, &range, sizeof(range));
+	status = mxt_read_reg(devContext, resolutionobject->start_address + MXT_T9_RANGE, &range, sizeof(range));
+	if (!NT_SUCCESS(status)) {
+		return status;
+	}
 
-	mxt_read_reg(devContext, resolutionobject->start_address + MXT_T9_ORIENT, &orient, 1);
+	status = mxt_read_reg(devContext, resolutionobject->start_address + MXT_T9_ORIENT, &orient, 1);
+	if (!NT_SUCCESS(status)) {
+		return status;
+	}
 
 	/* Handle default values */
 	if (range.x == 0)
@@ -143,11 +150,12 @@ static NTSTATUS mxt_read_t9_resolution(PATMEL_CONTEXT devContext)
 		devContext->max_y = range.y + 1;
 	}
 	AtmelPrint(DEBUG_LEVEL_INFO, DBG_PNP, "Screen Size: X: %d Y: %d\n", devContext->max_x, devContext->max_y);
-	return STATUS_SUCCESS;
+	return status;
 }
 
 static NTSTATUS mxt_read_t100_config(PATMEL_CONTEXT devContext)
 {
+	NTSTATUS status;
 	uint16_t range_x, range_y;
 	uint8_t cfg, tchaux;
 	uint8_t aux;
@@ -156,12 +164,21 @@ static NTSTATUS mxt_read_t100_config(PATMEL_CONTEXT devContext)
 	mxt_object *resolutionobject = mxt_findobject(&core, MXT_TOUCH_MULTITOUCHSCREEN_T100);
 
 	/* read touchscreen dimensions */
-	mxt_read_reg(devContext, resolutionobject->start_address + MXT_T100_XRANGE, &range_x, sizeof(range_x));
+	status = mxt_read_reg(devContext, resolutionobject->start_address + MXT_T100_XRANGE, &range_x, sizeof(range_x));
+	if (!NT_SUCCESS(status)) {
+		return status;
+	}
 
-	mxt_read_reg(devContext, resolutionobject->start_address + MXT_T100_YRANGE, &range_y, sizeof(range_y));
+	status = mxt_read_reg(devContext, resolutionobject->start_address + MXT_T100_YRANGE, &range_y, sizeof(range_y));
+	if (!NT_SUCCESS(status)) {
+		return status;
+	}
 
 	/* read orientation config */
-	mxt_read_reg(devContext, resolutionobject->start_address + MXT_T100_CFG1, &cfg, 1);
+	status = mxt_read_reg(devContext, resolutionobject->start_address + MXT_T100_CFG1, &cfg, 1);
+	if (!NT_SUCCESS(status)) {
+		return status;
+	}
 
 	if (cfg & MXT_T100_CFG_SWITCHXY) {
 		devContext->max_x = range_y + 1;
@@ -172,7 +189,10 @@ static NTSTATUS mxt_read_t100_config(PATMEL_CONTEXT devContext)
 		devContext->max_y = range_y + 1;
 	}
 
-	mxt_read_reg(devContext, resolutionobject->start_address + MXT_T100_TCHAUX, &tchaux, 1);
+	status = mxt_read_reg(devContext, resolutionobject->start_address + MXT_T100_TCHAUX, &tchaux, 1);
+	if (!NT_SUCCESS(status)) {
+		return status;
+	}
 
 	aux = 6;
 
@@ -185,7 +205,7 @@ static NTSTATUS mxt_read_t100_config(PATMEL_CONTEXT devContext)
 	if (tchaux & MXT_T100_TCHAUX_AREA)
 		devContext->t100_aux_area = aux++;
 	AtmelPrint(DEBUG_LEVEL_INFO, DBG_PNP, "Screen Size T100: X: %d Y: %d\n", devContext->max_x, devContext->max_y);
-	return STATUS_SUCCESS;
+	return status;
 }
 
 static NTSTATUS mxt_set_t7_power_cfg(PATMEL_CONTEXT  devContext, uint8_t sleep)
@@ -246,34 +266,41 @@ NTSTATUS BOOTTOUCHSCREEN(
 	_In_  PATMEL_CONTEXT  devContext
 )
 {
+	NTSTATUS status = STATUS_SUCCESS;
 	if (!devContext->TouchScreenBooted) {
 		int blksize;
 		int totsize;
 		uint32_t crc;
-		mxt_rollup core = devContext->core;
+		mxt_rollup *core = &devContext->core;
 
 		AtmelPrint(DEBUG_LEVEL_INFO, DBG_PNP, "Initializing Touch Screen.\n");
 
-		mxt_read_reg(devContext, 0, &core.info, sizeof(core.info));
+		status = mxt_read_reg(devContext, 0, &core->info, sizeof(core->info));
+		if (!NT_SUCCESS(status)) {
+			return status;
+		}
 
-		core.nobjs = core.info.num_objects;
+		core->nobjs = core->info.num_objects;
 
-		if (core.nobjs < 0 || core.nobjs > 1024) {
+		if (core->nobjs < 0 || core->nobjs > 1024) {
 			AtmelPrint(DEBUG_LEVEL_ERROR, DBG_PNP, "init_device nobjs (%d) out of bounds\n",
 				core.nobjs);
 		}
 
-		blksize = sizeof(core.info) +
-			core.nobjs * sizeof(struct mxt_object);
+		blksize = sizeof(core->info) +
+			core->nobjs * sizeof(struct mxt_object);
 		totsize = blksize + sizeof(struct mxt_raw_crc);
 
-		core.buf = (uint8_t *)ExAllocatePoolWithTag(NonPagedPool, totsize, ATMEL_POOL_TAG);
+		core->buf = (uint8_t *)ExAllocatePoolWithTag(NonPagedPool, totsize, ATMEL_POOL_TAG);
 
-		mxt_read_reg(devContext, 0, core.buf, totsize);
+		status = mxt_read_reg(devContext, 0, core->buf, totsize);
+		if (!NT_SUCCESS(status)) {
+			return status;
+		}
 
-		crc = obp_convert_crc((mxt_raw_crc *)((uint8_t *)core.buf + blksize));
+		crc = obp_convert_crc((mxt_raw_crc *)((uint8_t *)core->buf + blksize));
 
-		if (obp_crc24(core.buf, blksize) != crc) {
+		if (obp_crc24(core->buf, blksize) != crc) {
 			AtmelPrint(DEBUG_LEVEL_ERROR, DBG_PNP,
 				"init_device: configuration space "
 				"crc mismatch %08x/%08x\n",
@@ -283,17 +310,15 @@ NTSTATUS BOOTTOUCHSCREEN(
 			AtmelPrint(DEBUG_LEVEL_ERROR, DBG_PNP, "CRC Matched!\n");
 		}
 
-		core.objs = (mxt_object *)((uint8_t *)core.buf +
-			sizeof(core.info));
+		core->objs = (mxt_object *)((uint8_t *)core->buf +
+			sizeof(core->info));
 
-		devContext->msgprocobj = mxt_findobject(&core, MXT_GEN_MESSAGEPROCESSOR);
-		devContext->cmdprocobj = mxt_findobject(&core, MXT_GEN_COMMANDPROCESSOR);
-
-		devContext->core = core;
+		devContext->msgprocobj = mxt_findobject(core, MXT_GEN_MESSAGEPROCESSOR);
+		devContext->cmdprocobj = mxt_findobject(core, MXT_GEN_COMMANDPROCESSOR);
 
 		int reportid = 1;
-		for (int i = 0; i < core.nobjs; i++) {
-			mxt_object *obj = &core.objs[i];
+		for (int i = 0; i < core->nobjs; i++) {
+			mxt_object *obj = &core->objs[i];
 			uint8_t min_id, max_id;
 
 			if (obj->num_report_ids) {
@@ -378,7 +403,10 @@ NTSTATUS BOOTTOUCHSCREEN(
 			devContext->max_y_hid[1] = max_y8bit[1];
 		}
 
-		atmel_reset_device(devContext);
+		status = atmel_reset_device(devContext);
+		if (!NT_SUCCESS(status)) {
+			return status;
+		}
 
 		WDF_TIMER_CONFIG              timerConfig;
 		WDFTIMER                      hTimer;
@@ -397,15 +425,22 @@ NTSTATUS BOOTTOUCHSCREEN(
 		return status;
 	}
 	else {
-		if (devContext->multitouch == MXT_TOUCH_MULTITOUCHSCREEN_T100)
-			mxt_set_t7_power_cfg(devContext, MXT_POWER_CFG_RUN);
+		if (devContext->multitouch == MXT_TOUCH_MULTITOUCHSCREEN_T100) {
+			status = mxt_set_t7_power_cfg(devContext, MXT_POWER_CFG_RUN);
+			if (!NT_SUCCESS(status)) {
+				return status;
+			}
+		}
 		else {
 			struct mxt_object *obj = mxt_findobject(&devContext->core, MXT_TOUCH_MULTI_T9);
-			mxt_write_object_off(devContext, obj, MXT_T9_CTRL, 0x83);
+			status = mxt_write_object_off(devContext, obj, MXT_T9_CTRL, 0x83);
+			if (!NT_SUCCESS(status)) {
+				return status;
+			}
 		}
 
-		atmel_reset_device(devContext);
-		return STATUS_SUCCESS;
+		status = atmel_reset_device(devContext);
+		return status;
 	}
 }
 
@@ -498,7 +533,12 @@ Status
 
 	status = SpbTargetInitialize(FxDevice, &pDevice->I2CContext);
 
-	BOOTTOUCHSCREEN(pDevice);
+	if (!NT_SUCCESS(status))
+	{
+		return status;
+	}
+
+	status = BOOTTOUCHSCREEN(pDevice);
 
 	if (!NT_SUCCESS(status))
 	{
@@ -534,7 +574,9 @@ Status
 
 	UNREFERENCED_PARAMETER(FxResourcesTranslated);
 
-	ExFreePoolWithTag(pDevice->core.buf, ATMEL_POOL_TAG);
+	if (pDevice->core.buf != NULL) {
+		ExFreePoolWithTag(pDevice->core.buf, ATMEL_POOL_TAG);
+	}
 
 	pDevice->core.buf = NULL;
 
@@ -734,7 +776,11 @@ int AtmelReadAndProcessMessages(PATMEL_CONTEXT pDevice, uint8_t count) {
 		msg_buf[i] = 0xff;
 	}
 
-	mxt_read_reg(pDevice, pDevice->T5_address, msg_buf, pDevice->T5_msg_size * count);
+	NTSTATUS status = mxt_read_reg(pDevice, pDevice->T5_address, msg_buf, pDevice->T5_msg_size * count);
+	if (!NT_SUCCESS(status)) {
+		ExFreePoolWithTag(msg_buf, ATMEL_POOL_TAG);
+		return 0;
+	}
 
 	for (i = 0; i < count; i++) {
 		ret = AtmelProcessMessage(pDevice,
@@ -764,13 +810,17 @@ int AtmelProcessMessagesUntilInvalid(PATMEL_CONTEXT pDevice) {
 }
 
 bool AtmelDeviceReadT44(PATMEL_CONTEXT pDevice) {
-	NTSTATUS stret, ret;
+	NTSTATUS status;
+	int ret;
 	uint8_t count, num_left;
 
 	uint8_t *msg_buf = (uint8_t *)ExAllocatePoolWithTag(NonPagedPool, pDevice->T5_msg_size + 1, ATMEL_POOL_TAG);
 
 	/* Read T44 and T5 together */
-	stret = mxt_read_reg(pDevice, pDevice->T44_address, msg_buf, pDevice->T5_msg_size);
+	status = mxt_read_reg(pDevice, pDevice->T44_address, msg_buf, pDevice->T5_msg_size);
+	if (!NT_SUCCESS(status)) {
+		goto end;
+	}
 
 	count = msg_buf[0];
 
@@ -882,16 +932,18 @@ BOOLEAN OnInterruptIsr(
 	PATMEL_CONTEXT pDevice = GetDeviceContext(Device);
 
 	if (!pDevice->ConnectInterrupt)
-		return true;
+		return false;
+
+	bool ret = true;
 
 	if (pDevice->T44_address)
-		AtmelDeviceReadT44(pDevice);
+		ret = AtmelDeviceReadT44(pDevice);
 	else
-		AtmelDeviceRead(pDevice);
+		ret = AtmelDeviceRead(pDevice);
 
 	AtmelProcessInput(pDevice);
 
-	return true;
+	return ret;
 }
 
 void AtmelTimerFunc(_In_ WDFTIMER hTimer) {
