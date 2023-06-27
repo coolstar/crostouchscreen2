@@ -118,11 +118,22 @@ atmel_reset_device(PATMEL_CONTEXT  devContext)
 static NTSTATUS mxt_read_t9_resolution(PATMEL_CONTEXT devContext)
 {
 	struct t9_range range;
+	UINT8 xsize, ysize;
 	unsigned char orient;
 	NTSTATUS status;
 
 	mxt_rollup core = devContext->core;
 	mxt_object *resolutionobject = mxt_findobject(&core, MXT_TOUCH_MULTI_T9);
+
+	status = mxt_read_reg(devContext, resolutionobject->start_address + MXT_T9_XSIZE, &xsize, sizeof(xsize));
+	if (!NT_SUCCESS(status)) {
+		return status;
+	}
+
+	status = mxt_read_reg(devContext, resolutionobject->start_address + MXT_T9_YSIZE, &ysize, sizeof(ysize));
+	if (!NT_SUCCESS(status)) {
+		return status;
+	}
 
 	status = mxt_read_reg(devContext, resolutionobject->start_address + MXT_T9_RANGE, &range, sizeof(range));
 	if (!NT_SUCCESS(status)) {
@@ -205,6 +216,7 @@ static NTSTATUS mxt_read_t100_config(PATMEL_CONTEXT devContext)
 	if (tchaux & MXT_T100_TCHAUX_AREA)
 		devContext->t100_aux_area = aux++;
 	AtmelPrint(DEBUG_LEVEL_INFO, DBG_PNP, "Screen Size T100: X: %d Y: %d\n", devContext->max_x, devContext->max_y);
+
 	return status;
 }
 
@@ -284,7 +296,7 @@ NTSTATUS BOOTTOUCHSCREEN(
 
 		if (core->nobjs < 0 || core->nobjs > 1024) {
 			AtmelPrint(DEBUG_LEVEL_ERROR, DBG_PNP, "init_device nobjs (%d) out of bounds\n",
-				core.nobjs);
+				core->nobjs);
 		}
 
 		blksize = sizeof(core->info) +
@@ -304,7 +316,7 @@ NTSTATUS BOOTTOUCHSCREEN(
 			AtmelPrint(DEBUG_LEVEL_ERROR, DBG_PNP,
 				"init_device: configuration space "
 				"crc mismatch %08x/%08x\n",
-				crc, obp_crc24(core.buf, blksize));
+				crc, obp_crc24(core->buf, blksize));
 		}
 		else {
 			AtmelPrint(DEBUG_LEVEL_ERROR, DBG_PNP, "CRC Matched!\n");
