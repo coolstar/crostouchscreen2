@@ -84,7 +84,7 @@
       <WppKernelMode>true</WppKernelMode>
     </ClCompile>
     <Inf>
-      <TimeStamp>2.9.4</TimeStamp>
+      <TimeStamp>2.9.5</TimeStamp>
     </Inf>
     <DriverSign>
       <FileDigestAlgorithm>SHA256</FileDigestAlgorithm>
@@ -98,7 +98,7 @@
       <TreatWarningAsError>false</TreatWarningAsError>
     </ClCompile>
     <Inf>
-      <TimeStamp>2.9.4</TimeStamp>
+      <TimeStamp>2.9.5</TimeStamp>
     </Inf>
     <DriverSign>
       <FileDigestAlgorithm>SHA256</FileDigestAlgorithm>
@@ -111,7 +111,7 @@
       <WppKernelMode>true</WppKernelMode>
     </ClCompile>
     <Inf>
-      <TimeStamp>2.9.4</TimeStamp>
+      <TimeStamp>2.9.5</TimeStamp>
     </Inf>
     <DriverSign>
       <FileDigestAlgorithm>SHA256</FileDigestAlgorithm>
@@ -125,7 +125,7 @@
       <TreatWarningAsError>false</TreatWarningAsError>
     </ClCompile>
     <Inf>
-      <TimeStamp>2.9.4</TimeStamp>
+      <TimeStamp>2.9.5</TimeStamp>
     </Inf>
     <DriverSign>
       <FileDigestAlgorithm>SHA256</FileDigestAlgorithm>
@@ -150,6 +150,9 @@
     <ClCompile Include="crc.cpp" />
     <ClCompile Include="spb.cpp" />
     <ClCompile Include="atmel.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="crostouchscreen2.rc" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
